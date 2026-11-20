@@ -59,18 +59,24 @@ The widget downloads four public files from quranobservatory.org (the
 root index, the word-form index, and the concordance with its text, about
 3.5 MB together) and keeps them in
 `~/.cache/io.github.lavart.quran-observatory/`. Today's root, the search and
-every diagram run on that copy, so **what you type and the roots you look at
-are never sent anywhere**.
+every diagram run on that copy: **the widget itself never sends what you type
+or the roots you look at anywhere**. Only the explicit actions under *Site
+links* hand anything to the website.
 
 - **Update schedule:** downloads are weekly by default. The *Download root
-  data* setting switches them to daily, or *Off* to make no network
-  requests at all.
+  data* setting switches them to daily, or *Off* to stop them altogether:
+  the widget then makes no network requests of its own.
 - **Safe downloads:** a download replaces the cache only after it parses
   and validates, so a dropped connection never costs you the copy that
   works. Every field is length- and range-checked, and all text is drawn as
   plain text.
-- **Site links:** only the *Open on the site* and *Search the corpus*
-  buttons open quranobservatory.org, and they open it in your browser.
+- **Site links:** four actions, each one you take on purpose, open
+  quranobservatory.org in your browser, which then fetches the page as any
+  link would: **Ctrl+Enter** in the search (the URL carries what you typed),
+  the **Search the corpus** button (the same, or the root on show), **Open on
+  the site** (the root on show), and a **right click on the bar widget**
+  (today's root). Plain Enter never does: it picks a result or does nothing.
+  These work whatever the download setting.
 
 ## Install
 
@@ -98,8 +104,7 @@ run `omarchy-shell shell rescanPlugins` and
 | Up / Down (search empty) | switch the view |
 | Left / Right (search empty) | step through the example verses |
 | Page Up / Page Down | scroll the concordance |
-| Enter (search empty) | open the root on the site |
-| Ctrl+Enter | search the whole corpus on the site |
+| Ctrl+Enter | open this search on quranobservatory.org in your browser (sends the search text) |
 | Tab | next panel |
 
 ## Settings

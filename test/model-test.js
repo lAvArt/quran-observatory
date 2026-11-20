@@ -423,6 +423,21 @@ test("only PlainText draws text; nothing opts into rich text", () => {
   assert.ok(/textFormat:\s*Text\.PlainText/.test(qml["PlainText.qml"]))
 })
 
+test("plain Enter never opens the site; only Ctrl+Enter does", () => {
+  const src = qml["Panel.qml"]
+  const handler = src.slice(src.indexOf("function handleKey(event)"), src.indexOf("\n  }\n", src.indexOf("function handleKey(event)")))
+  const enter = handler.slice(handler.indexOf("Qt.Key_Return"), handler.indexOf("} else if", handler.indexOf("Qt.Key_Return")))
+  const opens = enter.match(/openSearchOnSite|openRootOnSite|openUrlExternally/g) || []
+  assert.deepStrictEqual(opens, ["openSearchOnSite"], "one way out of the Enter branch")
+  assert.ok(/if \(ctrl\) openSearchOnSite\(\)/.test(enter), "and it is behind Ctrl")
+  // The rings' root picker's Enter only picks.
+  const picker = src.slice(src.indexOf("id: slotField"), src.indexOf("id: slotField") + 1500)
+  assert.ok(!/openSearchOnSite|openRootOnSite|openUrlExternally/.test(picker))
+  // Every way to the site is an explicit action: the two buttons, Ctrl+Enter, the bar's right click.
+  const sites = (src.match(/root\.open(Search|Root)OnSite\(\)/g) || []).length
+  assert.strictEqual(sites, 2, "the two site buttons")
+})
+
 test("no shell command is built from data", () => {
   for (const [file, src] of Object.entries(qml)) {
     for (const m of src.matchAll(/"sh",\s*"-c",\s*("(?:[^"\\]|\\.)*")/g)) {

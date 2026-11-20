@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.1 (2026-11-20)
+
+- Privacy: plain Enter in the search no longer opens quranobservatory.org
+  when nothing matches (nor, with the search empty, the root on show). It
+  picks a result or does nothing; only Ctrl+Enter, the two site buttons and
+  a right click on the bar widget open the site, each on purpose. The hint,
+  the download setting and the README now say exactly what each sends.
+
 ## 1.4.0 (2026-11-20)
 
 - Rings: the site's concordance rings, with its two motions - travel when

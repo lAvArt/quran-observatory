@@ -3,7 +3,7 @@
   "bar.tooltipEmpty": "Quran Observatory: no root data yet",
   "search.placeholder": "Search a root, word or meaning",
   "search.none": "No root matches “%1”.",
-  "search.hint": "Enter picks a root · Ctrl+Enter searches the whole corpus on quranobservatory.org",
+  "search.hint": "Enter picks a root · Ctrl+Enter opens this search on quranobservatory.org in your browser, sending what you typed",
   "result.count": "%1×",
   "heading.today": "Today's root · %1",
   "heading.root": "Root",

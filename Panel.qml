@@ -15,9 +15,10 @@ import "Model.js" as Model
 //
 // Keyboard: type to search, Up/Down and Enter pick a result, Escape steps
 // back (clears the search, returns to today's root, then closes). With the
-// search empty, Up/Down switch the diagram, Left/Right step through the
-// verses, Page Up/Down scroll the concordance, and Enter opens the root on
-// quranobservatory.org; Ctrl+Enter always searches the corpus there.
+// search empty, Up/Down switch the view, Left/Right step through the
+// verses, and Page Up/Down scroll the concordance. Plain keys never leave the
+// machine: only Ctrl+Enter, the two site buttons and a right click on the bar
+// open quranobservatory.org in the browser - Ctrl+Enter with the search text.
 Panel {
   id: root
   moduleName: "io.github.lavart.quran-observatory"
@@ -277,10 +278,11 @@ Panel {
       kwicList.contentY = Math.max(0, Math.min(kwicList.contentHeight - kwicList.height,
         kwicList.contentY + (k === Qt.Key_PageDown ? 1 : -1) * kwicList.height * 0.9))
     } else if (k === Qt.Key_Return || k === Qt.Key_Enter) {
+      // Plain Enter stays on this machine: it picks a result or does
+      // nothing. Only Ctrl+Enter (or the buttons) opens the site, and with
+      // it whatever was typed.
       if (ctrl) openSearchOnSite()
       else if (searching && results.length) pick(results[Math.min(selectedIndex, results.length - 1)])
-      else if (searching) openSearchOnSite()
-      else openRootOnSite()
     } else if (k === Qt.Key_Tab || k === Qt.Key_Backtab) {
       switchPanel(k === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier) ? -1 : 1)
     } else if (!searching && (k === Qt.Key_Left || k === Qt.Key_Right)) {

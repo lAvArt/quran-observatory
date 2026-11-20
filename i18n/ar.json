@@ -3,7 +3,7 @@
   "bar.tooltipEmpty": "مرصد القرآن: لا توجد بيانات الجذور بعد",
   "search.placeholder": "ابحث عن جذر أو كلمة أو معنى",
   "search.none": "لا يوجد جذر يطابق «%1».",
-  "search.hint": "Enter لاختيار الجذر · Ctrl+Enter للبحث في المدوّنة كاملةً على quranobservatory.org",
+  "search.hint": "Enter لاختيار الجذر · Ctrl+Enter يفتح هذا البحث على quranobservatory.org في المتصفح، ويُرسل ما كتبته",
   "result.count": "%1×",
   "heading.today": "جذر اليوم · %1",
   "heading.root": "الجذر",

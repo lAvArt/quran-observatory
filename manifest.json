@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.lavart.quran-observatory",
   "name": "Quran Observatory",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "author": "lAvArt Studio",
   "description": "Today's Quranic root in the bar, from quranobservatory.org: its meaning and occurrences, example verses, the collocation burst, concordance rings, a concordance, the Quran structure map, and an offline root search.",
   "kinds": [
@@ -69,7 +69,7 @@
           "Off"
         ],
         "defaultValue": "Weekly",
-        "description": "Fetches the root index and concordance (about 3.5 MB) from quranobservatory.org and keeps it in ~/.cache. Today's root and search then work offline; what you type is never sent anywhere. Off makes no network requests, so with no saved copy the widget stays empty."
+        "description": "Fetches the root index and concordance (about 3.5 MB) from quranobservatory.org and keeps it in ~/.cache. Today's root, search and the diagrams then run offline and send nothing; only Ctrl+Enter and the site buttons open quranobservatory.org in your browser. Off stops these downloads, so with no saved copy the widget stays empty."
       },
       {
         "key": "arabicFont",
