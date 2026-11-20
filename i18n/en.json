@@ -1,0 +1,83 @@
+{
+  "bar.tooltip": "Today's root: %1 · %2",
+  "bar.tooltipEmpty": "Quran Observatory: no root data yet",
+  "search.placeholder": "Search a root, word or meaning",
+  "search.none": "No root matches “%1”.",
+  "search.hint": "Enter picks a root · Ctrl+Enter searches the whole corpus on quranobservatory.org",
+  "result.count": "%1×",
+  "heading.today": "Today's root · %1",
+  "heading.root": "Root",
+  "action.today": "Today",
+  "action.openRoot": "Open on the site",
+  "action.searchCorpus": "Search the corpus",
+  "action.retry": "Try again",
+  "action.downloadOnce": "Download once",
+  "status.loading": "Loading the root data…",
+  "status.downloading": "Downloading the root data from quranobservatory.org…",
+  "status.offline": "Couldn't reach quranobservatory.org. The widget will try again later.",
+  "status.invalid": "The root data from quranobservatory.org couldn't be read. The widget will try again later.",
+  "status.disabled": "Downloads are off and there's no saved copy of the root data. Turn downloads on in this widget's settings, or download once.",
+  "stat.occurrences": {
+    "one": "%1 occurrence",
+    "other": "%1 occurrences"
+  },
+  "stat.occurrencesLabel": {
+    "one": "occurrence",
+    "other": "occurrences"
+  },
+  "stat.versesLabel": {
+    "one": "verse",
+    "other": "verses"
+  },
+  "stat.surahsLabel": {
+    "one": "surah",
+    "other": "surahs"
+  },
+  "stat.formsLabel": {
+    "one": "word form",
+    "other": "word forms"
+  },
+  "pos.noun": {
+    "one": "%1 noun",
+    "other": "%1 nouns"
+  },
+  "pos.verb": {
+    "one": "%1 verb",
+    "other": "%1 verbs"
+  },
+  "pos.adjective": {
+    "one": "%1 adjective",
+    "other": "%1 adjectives"
+  },
+  "pos.properNoun": {
+    "one": "%1 proper noun",
+    "other": "%1 proper nouns"
+  },
+  "pos.particle": {
+    "one": "%1 particle",
+    "other": "%1 particles"
+  },
+  "pos.pronoun": {
+    "one": "%1 pronoun",
+    "other": "%1 pronouns"
+  },
+  "pos.adverb": {
+    "one": "%1 adverb",
+    "other": "%1 adverbs"
+  },
+  "pos.imperativeNoun": {
+    "one": "%1 verbal noun",
+    "other": "%1 verbal nouns"
+  },
+  "hist.hover": "%1 (%2) · %3",
+  "hist.topEntry": "%1 %2",
+  "hist.mostIn": "Most in %1",
+  "verses.heading": "In the Quran",
+  "verses.previous": "Previous verse",
+  "verses.next": "Next verse",
+  "verses.position": "%1 / %2",
+  "verses.reference": "%1 %2:%3",
+  "verses.none": "Example verses come with the featured roots. Open the root on the site for every occurrence.",
+  "verses.noneFirst": "First appears in %1 %2:%3. Example verses come with the featured roots; open the root on the site for every occurrence.",
+  "footer.source": "Data from quranobservatory.org, built on the Quranic Arabic Corpus (University of Leeds)"
+}

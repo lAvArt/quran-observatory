@@ -1,0 +1,135 @@
+{
+  "bar.tooltip": "جذر اليوم: %1 · %2",
+  "bar.tooltipEmpty": "مرصد القرآن: لا توجد بيانات الجذور بعد",
+  "search.placeholder": "ابحث عن جذر أو كلمة أو معنى",
+  "search.none": "لا يوجد جذر يطابق «%1».",
+  "search.hint": "Enter لاختيار الجذر · Ctrl+Enter للبحث في المدوّنة كاملةً على quranobservatory.org",
+  "result.count": "%1×",
+  "heading.today": "جذر اليوم · %1",
+  "heading.root": "الجذر",
+  "action.today": "اليوم",
+  "action.openRoot": "افتح في الموقع",
+  "action.searchCorpus": "ابحث في المدوّنة",
+  "action.retry": "أعد المحاولة",
+  "action.downloadOnce": "نزّل مرة واحدة",
+  "status.loading": "جارٍ تحميل بيانات الجذور…",
+  "status.downloading": "جارٍ تنزيل بيانات الجذور من quranobservatory.org…",
+  "status.offline": "تعذّر الوصول إلى quranobservatory.org. ستُعاد المحاولة لاحقًا.",
+  "status.invalid": "تعذّرت قراءة بيانات الجذور من quranobservatory.org. ستُعاد المحاولة لاحقًا.",
+  "status.disabled": "التنزيل متوقف ولا توجد نسخة محفوظة من بيانات الجذور. فعّل التنزيل من إعدادات هذه الأداة، أو نزّلها مرة واحدة.",
+  "stat.occurrences": {
+    "zero": "%1 موضع",
+    "one": "موضع واحد",
+    "two": "موضعان",
+    "few": "%1 مواضع",
+    "many": "%1 موضعًا",
+    "other": "%1 موضع"
+  },
+  "stat.occurrencesLabel": {
+    "zero": "موضع",
+    "one": "موضع",
+    "two": "موضعان",
+    "few": "مواضع",
+    "many": "موضعًا",
+    "other": "موضع"
+  },
+  "stat.versesLabel": {
+    "zero": "آية",
+    "one": "آية",
+    "two": "آيتان",
+    "few": "آيات",
+    "many": "آيةً",
+    "other": "آية"
+  },
+  "stat.surahsLabel": {
+    "zero": "سورة",
+    "one": "سورة",
+    "two": "سورتان",
+    "few": "سور",
+    "many": "سورةً",
+    "other": "سورة"
+  },
+  "stat.formsLabel": {
+    "zero": "صيغة",
+    "one": "صيغة",
+    "two": "صيغتان",
+    "few": "صيغ",
+    "many": "صيغةً",
+    "other": "صيغة"
+  },
+  "pos.noun": {
+    "zero": "%1 اسم",
+    "one": "اسم واحد",
+    "two": "اسمان",
+    "few": "%1 أسماء",
+    "many": "%1 اسمًا",
+    "other": "%1 اسم"
+  },
+  "pos.verb": {
+    "zero": "%1 فعل",
+    "one": "فعل واحد",
+    "two": "فعلان",
+    "few": "%1 أفعال",
+    "many": "%1 فعلًا",
+    "other": "%1 فعل"
+  },
+  "pos.adjective": {
+    "zero": "%1 صفة",
+    "one": "صفة واحدة",
+    "two": "صفتان",
+    "few": "%1 صفات",
+    "many": "%1 صفةً",
+    "other": "%1 صفة"
+  },
+  "pos.properNoun": {
+    "zero": "%1 علم",
+    "one": "علم واحد",
+    "two": "علمان",
+    "few": "%1 أعلام",
+    "many": "%1 علمًا",
+    "other": "%1 علم"
+  },
+  "pos.particle": {
+    "zero": "%1 حرف",
+    "one": "حرف واحد",
+    "two": "حرفان",
+    "few": "%1 حروف",
+    "many": "%1 حرفًا",
+    "other": "%1 حرف"
+  },
+  "pos.pronoun": {
+    "zero": "%1 ضمير",
+    "one": "ضمير واحد",
+    "two": "ضميران",
+    "few": "%1 ضمائر",
+    "many": "%1 ضميرًا",
+    "other": "%1 ضمير"
+  },
+  "pos.adverb": {
+    "zero": "%1 ظرف",
+    "one": "ظرف واحد",
+    "two": "ظرفان",
+    "few": "%1 ظروف",
+    "many": "%1 ظرفًا",
+    "other": "%1 ظرف"
+  },
+  "pos.imperativeNoun": {
+    "zero": "%1 اسم فعل",
+    "one": "اسم فعل واحد",
+    "two": "اسما فعل",
+    "few": "%1 أسماء أفعال",
+    "many": "%1 اسم فعل",
+    "other": "%1 اسم فعل"
+  },
+  "hist.hover": "%1 (%2) · %3",
+  "hist.topEntry": "%1 %2",
+  "hist.mostIn": "أكثر وروده في %1",
+  "verses.heading": "في القرآن",
+  "verses.previous": "الآية السابقة",
+  "verses.next": "الآية التالية",
+  "verses.position": "%1 / %2",
+  "verses.reference": "%1 %2:%3",
+  "verses.none": "الآيات الأمثلة متاحة للجذور المختارة. افتح الجذر في الموقع لرؤية كل مواضعه.",
+  "verses.noneFirst": "أول وروده في %1 %2:%3. الآيات الأمثلة متاحة للجذور المختارة؛ افتح الجذر في الموقع لرؤية كل مواضعه.",
+  "footer.source": "البيانات من quranobservatory.org، المبنيّ على المدوّنة القرآنية العربية (جامعة ليدز)"
+}

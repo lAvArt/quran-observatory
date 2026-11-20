@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.lavart.quran-observatory",
+  "name": "Quran Observatory",
+  "version": "1.0.0",
+  "author": "lAvArt Studio",
+  "description": "Today's Quranic root in the bar, from quranobservatory.org: its meaning, how often and where it occurs, example verses, and an offline root search.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Quran Observatory",
+    "description": "Today's root in the bar; click for its verses, statistics and a root search.",
+    "category": "Info",
+    "allowMultiple": false,
+    "defaults": {
+      "label": "Root and meaning",
+      "showCount": "On",
+      "updates": "Weekly",
+      "arabicFont": "Noto Naskh Arabic"
+    },
+    "schema": [
+      {
+        "key": "label",
+        "type": "enum",
+        "label": "Bar label",
+        "options": [
+          "Root and meaning",
+          "Root",
+          "Transliteration and meaning",
+          "Icon only"
+        ],
+        "defaultValue": "Root and meaning",
+        "description": "What the bar shows for today's root. Vertical bars always show the icon."
+      },
+      {
+        "key": "showCount",
+        "type": "enum",
+        "label": "Show occurrences",
+        "options": [
+          "On",
+          "Off"
+        ],
+        "defaultValue": "On",
+        "description": "Adds how many times the root occurs in the Quran to the bar label, for example 196×."
+      },
+      {
+        "key": "updates",
+        "type": "enum",
+        "label": "Download root data",
+        "options": [
+          "Weekly",
+          "Daily",
+          "Off"
+        ],
+        "defaultValue": "Weekly",
+        "description": "Fetches the root index (about 1.7 MB) from quranobservatory.org and keeps it in ~/.cache. Today's root and search then work offline; what you type is never sent anywhere. Off makes no network requests, so with no saved copy the widget stays empty."
+      },
+      {
+        "key": "arabicFont",
+        "type": "string",
+        "label": "Arabic font",
+        "defaultValue": "Noto Naskh Arabic",
+        "description": "The font for roots and verses, for example Noto Naskh Arabic, Amiri or Scheherazade New. It has to be installed."
+      }
+    ]
+  }
+}
