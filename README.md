@@ -25,11 +25,23 @@ of the verse on show is spotlighted. Under that, one view at a time:
   verses × PMI), so the commonest roots don't crowd out the telling ones:
   ر-ح-م's companions include غ-ف-ر (forgive), ت-و-ب (repent), ف-ض-ل (bounty).
   Click a companion to move to it.
+- **Rings**: the site's concordance rings. Every sūrah is a ring (114 at
+  the centre, 1 outermost), every verse a tick, taller for longer verses,
+  lit where the chosen roots occur and cream where they all meet; threads
+  join meetings on neighbouring rings, and a histogram round the outside
+  shows where in their sūrahs the meetings fall. Up to three roots, each
+  picked by search (the root on show and its strongest companion to
+  start). The rings move as on the site: re-order them (114 → 1, short →
+  long, by first meeting) and they travel to their new places; **Align**
+  turns every ring until its first meeting sits under the marker at 12
+  o'clock. Hover a verse to read it.
 - **Concordance**: every occurrence in context, with the word centred
   between what comes before and after it, and its verse reference
-- **Distribution**: a grid of the 114 sūrahs shaded by occurrences per
-  1,000 words, so long sūrahs don't win by length, and the Makkan /
-  Madinan split, marked against where an even spread would fall
+- **Structure**: the site's Quran structure map. The 114 sūrahs round a
+  clock face, tinted Makki or Madani, each with an inward bar for its
+  length and a stack of dots outward, one per verse holding the root; hover
+  a sūrah for its name and counts. Under it, the Makkan / Madinan split,
+  marked against where an even spread would fall.
 
 Search by Arabic root or word (`رحمة`, `يكتبون`, `أم القرى`), English meaning
 (`mercy`), Buckwalter (`rHm`) or transliteration (`r h m`).
@@ -62,6 +74,9 @@ are never sent anywhere**.
 omarchy plugin add https://github.com/lAvArt/quran-observatory --enable
 ```
 
+To remove it: `omarchy plugin remove io.github.lavart.quran-observatory`, and
+delete `~/.cache/io.github.lavart.quran-observatory/` for the downloaded data.
+
 Or copy the plugin files into
 `~/.config/omarchy/plugins/io.github.lavart.quran-observatory/`, then
 run `omarchy-shell shell rescanPlugins` and
@@ -76,7 +91,7 @@ run `omarchy-shell shell rescanPlugins` and
 | Type | search |
 | Up / Down, Enter | choose a result |
 | Escape | clear the search, go back to today's root, then close |
-| Up / Down (search empty) | switch the diagram |
+| Up / Down (search empty) | switch the view |
 | Left / Right (search empty) | step through the example verses |
 | Page Up / Page Down | scroll the concordance |
 | Enter (search empty) | open the root on the site |
@@ -102,7 +117,10 @@ setting. In Arabic, the site links open the Arabic version of the site.
 qs ipc call io.github.lavart.quran-observatory today       # خ-ي-ر (kh · y · r) - good / better - 196 occurrences
 qs ipc call io.github.lavart.quran-observatory search رحمة  # open the panel on a search
 qs ipc call io.github.lavart.quran-observatory toggle
-qs ipc call io.github.lavart.quran-observatory view companions   # or verses, concordance, distribution
+qs ipc call io.github.lavart.quran-observatory view companions   # or verses, rings, concordance, structure
+qs ipc call io.github.lavart.quran-observatory showRoot mercy     # open on a root
+qs ipc call io.github.lavart.quran-observatory ringsRoots "غفر رحم"   # the rings' roots
+qs ipc call io.github.lavart.quran-observatory rings first true   # order (mushaf | length | first), align
 qs ipc call io.github.lavart.quran-observatory refresh     # download the data now
 ```
 

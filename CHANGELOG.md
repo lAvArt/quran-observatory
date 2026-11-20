@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.0 (2026-11-20)
+
+- Rings: the site's concordance rings, with its two motions - travel when
+  the order changes (114 → 1, short → long, by first meeting) and a calm
+  turn to align every first meeting at 12 o'clock. Up to three roots, each
+  picked by search; hover a verse to read it.
+- Structure: the site's Quran structure map in occurrence mode, with the
+  Makkan / Madinan split under it. It replaces Distribution.
+- New IPC calls: `showRoot`, `ringsRoots`, `rings`.
+
 ## 1.3.0 (2026-11-20)
 
 - Graphs drawn the way quranobservatory.org draws them: the "Where it occurs

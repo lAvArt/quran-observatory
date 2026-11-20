@@ -332,6 +332,68 @@ test("curveControl bows to a fixed side", () => {
   assert.deepStrictEqual(M.curveControl(0, 0, 100, 0, "a:b", 0.22), c)
 })
 
+test("concordanceRings follows the site's meeting and qualifying rules", () => {
+  const sel = M.concordanceRings(conc, ["رحم", "غفر"], "ayah")
+  assert.deepStrictEqual(sel.roots, ["رحم", "غفر"])
+  assert.deepStrictEqual(sel.qualifying.map((r) => r.n), [1, 2])
+  assert.strictEqual(sel.totalMeetings, 3, "1:1, 1:2 and 2:1 hold both")
+  const s1 = sel.rings[0]
+  assert.deepStrictEqual(s1.hits.map((h) => [h.ayah, h.mask, h.meeting]), [[1, 3, true], [2, 3, true], [3, 1, false]])
+  assert.strictEqual(s1.hits[2].pos, 2.5 / 3)
+  assert.deepStrictEqual(s1.words, [3, 2, 3])
+  assert.strictEqual(s1.maxWords, 3)
+  assert.strictEqual(M.concordanceRings(conc, ["رحم", "كتب"], "ayah").qualifying.length, 1, "only 1:3 has both")
+  assert.strictEqual(M.concordanceRings(conc, ["غفر", "كتب"], "ayah").qualifying.length, 0)
+  assert.strictEqual(M.concordanceRings(conc, ["غفر", "كتب"], "surah").qualifying.length, 2, "each somewhere in sūrahs 1 and 2")
+  assert.strictEqual(M.concordanceRings(conc, ["نور"], "ayah"), null)
+  assert.strictEqual(M.concordanceRings(conc, ["رحم", "رحم", "غفر", "كتب", "علم"], "ayah").roots.length, 3, "deduped, three at most")
+})
+
+test("ring order and alignment follow the site", () => {
+  const ring = (n, ayahCount, firsts) => ({ n, ayahCount, meetings: firsts.map((pos) => ({ pos })) })
+  const rings = [ring(2, 286, [0.6]), ring(1, 7, [0.2]), ring(114, 6, []), ring(36, 83, [0.05])]
+  assert.deepStrictEqual(M.ringOrder(rings, "mushaf").map((r) => r.n), [114, 36, 2, 1], "114 innermost")
+  assert.deepStrictEqual(M.ringOrder(rings, "length").map((r) => r.n), [114, 1, 36, 2], "short to long")
+  assert.deepStrictEqual(M.ringOrder(rings, "first").map((r) => r.n), [36, 1, 2, 114], "by first meeting, none last")
+  assert.deepStrictEqual(rings.map((r) => r.n), [2, 1, 114, 36], "input untouched")
+  const gap = 0.38
+  assert.strictEqual(M.ringAngle(0, gap), gap / 2)
+  assert.ok(Math.abs(M.ringAngle(1, gap) - (2 * Math.PI - gap / 2)) < 1e-12)
+  for (const r of rings) {
+    const turn = M.alignRotation(r, gap)
+    assert.ok(turn > -Math.PI && turn <= Math.PI, "shortest way round")
+    if (r.meetings.length) {
+      const landed = ((M.ringAngle(r.meetings[0].pos, gap) + turn) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI)
+      assert.ok(landed < 1e-9 || 2 * Math.PI - landed < 1e-9, "first meeting at 12 o'clock")
+    } else assert.strictEqual(turn, 0)
+  }
+  assert.ok(M.alignRotation(ring(2, 286, [0.9]), gap) > 0, "late meetings turn forward")
+  assert.strictEqual(M.easeInOutCubic(0), 0)
+  assert.strictEqual(M.easeInOutCubic(1), 1)
+  assert.strictEqual(M.easeInOutCubic(0.5), 0.5)
+})
+
+test("meetingHistogram bins meeting positions", () => {
+  const hist = M.meetingHistogram(M.concordanceRings(conc, ["رحم", "غفر"], "ayah"), 4)
+  assert.deepStrictEqual(hist, [2, 0, 1, 0], "1:1 and 2:1 sit at 1/6, 1:2 at 1/2")
+  assert.deepStrictEqual(M.meetingHistogram(null, 3), [0, 0, 0])
+})
+
+test("structureMap counts āyahs per sūrah and scales length like the site", () => {
+  const map = M.structureMap(conc, "علم")
+  assert.strictEqual(map.surahs.length, 114)
+  assert.strictEqual(map.surahs[1].dots, 2, "two āyahs of sūrah 2 hold علم")
+  assert.strictEqual(map.ayahsWithRoot, 2)
+  assert.strictEqual(map.surahsWithRoot, 1)
+  const longest = Math.max(...map.surahs.map((x) => x.bar))
+  assert.strictEqual(longest, 1)
+  assert.ok(map.surahs[113].bar >= 16 / 120 - 1e-9)
+  assert.strictEqual(map.surahs[1].makkan, false)
+  assert.strictEqual(M.occurrenceStep(1), 0)
+  assert.strictEqual(M.occurrenceStep(10), 10)
+  assert.strictEqual(M.occurrenceStep(77), 380 / 76)
+})
+
 test("revelation places", () => {
   assert.strictEqual(M.REVELATION.length, 114)
   assert.strictEqual(M.isMakkan(1), true)

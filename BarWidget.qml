@@ -71,7 +71,10 @@ BarWidget {
   function close() { if (panelLoader.item) panelLoader.item.close() }
   function togglePanel() { if (panelLoader.item) panelLoader.item.toggle() }
   function openSearch(query) { if (panelLoader.item) panelLoader.item.openWithQuery(String(query || "")) }
+  function showRoot(query) { if (panelLoader.item) panelLoader.item.showRoot(String(query || "")) }
   function openView(name) { if (panelLoader.item) panelLoader.item.openView(String(name || "")) }
+  function setRings(order, align) { if (panelLoader.item) panelLoader.item.setRings(String(order || ""), align) }
+  function setRingRoots(roots) { if (panelLoader.item) { panelLoader.item.openView("rings"); panelLoader.item.setRingRoots(String(roots || "")) } }
 
   readonly property real openPanelIndicatorWidth: customLabel ? customRow.implicitWidth
     : (button.labelWidth > 0 ? button.labelWidth : Math.max(Style.space(10), Math.round(Style.bar.iconSlot * 0.55)))
@@ -125,8 +128,14 @@ BarWidget {
     function today(): string { return Model.todayText(root.today) }
     function refresh(): void { root.refreshData() }
     function search(query: string): void { root.openSearch(query) }
+    // Open the panel on the root a query finds: "رحمة", "mercy", "rHm".
+    function showRoot(query: string): void { root.showRoot(query) }
     // verses | companions | concordance | distribution
     function view(name: string): void { root.openView(name) }
+    // Concordance rings: order (mushaf | length | first) and align (true | false).
+    function rings(order: string, align: bool): void { root.setRings(order, align) }
+    // The rings' roots, bare and space separated: "غفر رحم".
+    function ringsRoots(roots: string): void { root.setRingRoots(roots) }
     function open(): void { root.open() }
     function close(): void { root.close() }
     function show(): void { root.open() }

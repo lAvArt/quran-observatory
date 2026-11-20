@@ -928,6 +928,142 @@ function collocationLayout(list, seed, width, height) {
   return out
 }
 
+// The site's concordance rings (concordanceClient selectConcordance): every
+// sūrah a ring, every āyah a tick at (i - ½) / N round it, lit where the
+// chosen roots occur; a meeting is an āyah holding all of them. With "ayah"
+// a sūrah qualifies when it has a meeting, with "surah" when each root is
+// somewhere in it. One to three roots, given as bare forms.
+function concordanceRings(conc, bares, meetIn) {
+  if (!conc) return null
+  var picked = []
+  for (var p = 0; p < bares.length && picked.length < 3; p++) {
+    var at = conc.lookup[bares[p]]
+    if (at !== undefined && picked.indexOf(at) < 0) picked.push(at)
+  }
+  if (!picked.length) return null
+  var all = (1 << picked.length) - 1
+  var rings = []
+  var totalMeetings = 0
+  for (var s = 0; s < SURAH_COUNT; s++) {
+    var ayahs = conc.surahs[s]
+    var n = ayahs.length
+    var words = []
+    var hits = []
+    var meetings = []
+    var perRoot = picked.map(function() { return 0 })
+    var maxWords = 1
+    for (var i = 0; i < n; i++) {
+      var ayah = ayahs[i]
+      words.push(ayah.length)
+      if (ayah.length > maxWords) maxWords = ayah.length
+      var mask = 0
+      for (var w = 0; w < ayah.length; w++) {
+        var slot = ayah[w] < 0 ? -1 : picked.indexOf(ayah[w])
+        if (slot >= 0) mask |= 1 << slot
+      }
+      if (!mask) continue
+      var hit = { ayah: i + 1, mask: mask, words: ayah.length, pos: (i + 0.5) / n, meeting: mask === all }
+      for (var b = 0; b < picked.length; b++) if (mask & (1 << b)) perRoot[b]++
+      hits.push(hit)
+      if (hit.meeting) meetings.push(hit)
+    }
+    var qualifies = meetIn === "surah" ? perRoot.every(function(c) { return c > 0 }) : meetings.length > 0
+    totalMeetings += meetings.length
+    rings.push({ n: s + 1, makkan: isMakkan(s + 1), ayahCount: n, words: words, maxWords: maxWords, hits: hits, meetings: meetings, perRoot: perRoot, qualifies: qualifies })
+  }
+  return {
+    roots: picked.map(function(i) { return conc.roots[i] }),
+    rings: rings,
+    qualifying: rings.filter(function(r) { return r.qualifies }),
+    totalMeetings: totalMeetings
+  }
+}
+
+// Ring order, inside to out, as the site offers it: mushaf order (114 at the
+// centre, 1 outermost), short to long, or by where the first meeting falls
+// (rings without one go last) - the order that, aligned, turns the meetings'
+// spiral into a column.
+function ringOrder(rings, mode) {
+  var out = rings.slice()
+  if (mode === "length") {
+    out.sort(function(a, b) { return a.ayahCount - b.ayahCount || b.n - a.n })
+  } else if (mode === "first") {
+    out.sort(function(a, b) {
+      var fa = a.meetings.length ? a.meetings[0].pos : 2
+      var fb = b.meetings.length ? b.meetings[0].pos : 2
+      return fa - fb || b.n - a.n
+    })
+  } else {
+    out.sort(function(a, b) { return b.n - a.n })
+  }
+  return out
+}
+
+// Ring angles run clockwise from 12 o'clock, with a gap there between 100
+// and 0: position 0..1 to an angle.
+function ringAngle(pos, gap) {
+  return gap / 2 + pos * (2 * Math.PI - gap)
+}
+
+// The turn that brings a ring's first meeting under the marker at 12
+// o'clock, the shortest way round (the site's calm variant). 0 without one.
+function alignRotation(ring, gap) {
+  if (!ring.meetings.length) return 0
+  var turn = -ringAngle(ring.meetings[0].pos, gap)
+  while (turn <= -Math.PI) turn += 2 * Math.PI
+  while (turn > Math.PI) turn -= 2 * Math.PI
+  return turn
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+}
+
+// Where the meetings fall through their sūrahs, 0 to 100 in `bins` steps:
+// the histogram round the outside of the rings.
+function meetingHistogram(selection, bins) {
+  var n = bins > 0 ? bins : 20
+  var out = []
+  for (var i = 0; i < n; i++) out.push(0)
+  if (!selection) return out
+  for (var r = 0; r < selection.qualifying.length; r++) {
+    var ms = selection.qualifying[r].meetings
+    for (var m = 0; m < ms.length; m++) out[Math.min(n - 1, Math.floor(ms[m].pos * n))]++
+  }
+  return out
+}
+
+// The site's Quran structure map in occurrence mode (lib/viz/structureMap):
+// the 114 sūrahs round a clock face, each with an inward bar for its length
+// (square-root scaled) and, outward, one dot per āyah holding the root.
+function structureMap(conc, bare) {
+  if (!conc) return null
+  var dots = []
+  for (var i = 0; i < SURAH_COUNT; i++) dots.push(0)
+  var occ = rootOccurrences(conc, bare)
+  for (var o = 0; o < occ.length; o++) dots[occ[o].s - 1]++
+  var maxWords = maxOf(conc.words)
+  var surahs = []
+  for (var s = 0; s < SURAH_COUNT; s++) {
+    surahs.push({
+      n: s + 1,
+      makkan: isMakkan(s + 1),
+      words: conc.words[s],
+      ayahs: conc.surahs[s].length,
+      // The site's barLength, as a share of BAR_MAX: 16 + 104 * sqrt(words / max).
+      bar: (16 + 104 * Math.sqrt(conc.words[s] / Math.max(1, maxWords))) / 120,
+      dots: dots[s]
+    })
+  }
+  return { surahs: surahs, ayahsWithRoot: occ.length, surahsWithRoot: dots.filter(function(d) { return d > 0 }).length }
+}
+
+// The site's occurrence stacks: dots 10 apart, tightened so a long stack
+// never runs past 380 (in the map's 1000-unit world).
+function occurrenceStep(count) {
+  return count > 1 ? Math.min(10, 380 / (count - 1)) : 0
+}
+
 // The control point of the site's curved strands (buildCurvedPath): bowed
 // off the straight line by a share of its length, to a side fixed per pair.
 function curveControl(sx, sy, tx, ty, key, bendScale) {
@@ -1015,6 +1151,14 @@ if (typeof module !== "undefined") {
     hashString: hashString,
     collocationLayout: collocationLayout,
     curveControl: curveControl,
+    concordanceRings: concordanceRings,
+    meetingHistogram: meetingHistogram,
+    ringOrder: ringOrder,
+    ringAngle: ringAngle,
+    alignRotation: alignRotation,
+    easeInOutCubic: easeInOutCubic,
+    structureMap: structureMap,
+    occurrenceStep: occurrenceStep,
     needsDownload: needsDownload,
     moveSelection: moveSelection
   }

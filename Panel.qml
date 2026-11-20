@@ -63,10 +63,9 @@ Panel {
     return m
   }
   property int hoveredSurah: 0
-  property int hoveredCell: 0
 
   // The diagram under the root's numbers. Only the open one is computed.
-  readonly property var views: ["verses", "companions", "concordance", "distribution"]
+  readonly property var views: ["verses", "companions", "rings", "concordance", "structure"]
   property string view: "verses"
   readonly property var conc: hostWidget ? hostWidget.concordance : null
 
@@ -83,14 +82,89 @@ Panel {
     return Model.concordanceLines(conc, hostWidget.concordanceText(), shown.bare, 4)
   }
 
-  readonly property var dist: view === "distribution" && shown && conc ? Model.distribution(conc, shown.bare) : null
-  readonly property real densityMax: dist ? Model.maxOf(dist.density) : 0
+  readonly property var dist: view === "structure" && shown && conc ? Model.distribution(conc, shown.bare) : null
+  readonly property var structureData: view === "structure" && shown && conc ? Model.structureMap(conc, shown.bare) : null
+
+  // Rings: up to three roots, each chosen by the reader as on the site. Until
+  // they choose (ringRootsChoice null), the root on show and its strongest
+  // companion.
+  property var ringRootsChoice: null
+  readonly property var ringPartners: view === "rings" && shown && conc ? Model.companions(conc, shown.bare, versesOf, 6, 3) : []
+  readonly property var ringRoots: ringRootsChoice
+    ? ringRootsChoice
+    : (shown ? (ringPartners.length ? [shown.bare, ringPartners[0].bare] : [shown.bare]) : [])
+  readonly property var ringsSel: view === "rings" && conc && ringRoots.length ? Model.concordanceRings(conc, ringRoots, "ayah") : null
+
+  // The slot being edited (-1 none; ringRoots.length adds a root) and its query.
+  property int editingSlot: -1
+  property string slotQuery: ""
+  readonly property var slotSuggestions: {
+    if (editingSlot < 0 || !index) return []
+    var taken = ringRoots
+    var pool = slotQuery.trim() !== ""
+      ? Model.search(index, slotQuery, 10, forms)
+      : ringPartners.map(function(c) { return index.roots[c.bare] }).filter(function(r) { return !!r })
+    return pool.filter(function(r, i) { return taken.indexOf(r.bare) < 0 || taken.indexOf(r.bare) === editingSlot }).slice(0, 6)
+  }
+
+  function ringColour(slot) {
+    return slot === 0 ? accent : (slot === 1 ? accent2 : contentForeground)
+  }
+
+  function editSlot(slot) {
+    editingSlot = slot
+    slotQuery = ""
+    Qt.callLater(function() { if (slotField) { slotField.text = ""; slotField.forceActiveFocus() } })
+  }
+
+  function stopEditingSlot() {
+    editingSlot = -1
+    slotQuery = ""
+    Qt.callLater(function() { searchField.forceActiveFocus() })
+  }
+
+  function setSlot(slot, bare) {
+    var roots = ringRoots.slice()
+    var already = roots.indexOf(bare)
+    if (already >= 0 && already !== slot) roots.splice(already, 1)
+    if (slot >= roots.length) roots.push(bare)
+    else roots[slot] = bare
+    ringRootsChoice = roots.slice(0, 3)
+    stopEditingSlot()
+  }
+
+  function removeSlot(slot) {
+    if (ringRoots.length <= 1) return
+    var roots = ringRoots.slice()
+    roots.splice(slot, 1)
+    ringRootsChoice = roots
+    if (editingSlot >= 0) stopEditingSlot()
+  }
+
+  // By script: bare roots, space separated (e.g. "غفر رحم"), known ones only.
+  function setRingRoots(text) {
+    var roots = []
+    var parts = String(text || "").split(/\s+/)
+    for (var i = 0; i < parts.length && roots.length < 3; i++)
+      if (index && index.roots[parts[i]] && roots.indexOf(parts[i]) < 0) roots.push(parts[i])
+    if (roots.length) ringRootsChoice = roots
+  }
+  readonly property var ringsHist: Model.meetingHistogram(ringsSel, 20)
+
+  // The site's palette from the theme: the first root in the accent, the
+  // second a cool counterpart 144° round (orange -> the site's teal; cool
+  // Makki against warm Madani too), meetings
+  // in cream. A colourless accent leaves the complement a quiet foreground.
+  readonly property color accent2: accent.hslSaturation > 0.12
+    ? Qt.hsla((accent.hslHue + 0.4) % 1, Math.max(0.3, accent.hslSaturation * 0.6), Math.min(0.6, Math.max(0.45, accent.hslLightness)), 1)
+    : Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.55)
+  readonly property color cream: Qt.tint(contentForeground, Qt.rgba(1, 0.93, 0.8, 0.35))
 
   function stepView(delta) {
     view = views[Model.moveSelection(Math.max(0, views.indexOf(view)), delta, views.length)]
   }
 
-  onShownChanged: { exampleIndex = 0; hoveredSurah = 0; hoveredCell = 0 }
+  onShownChanged: { exampleIndex = 0; hoveredSurah = 0; ringRootsChoice = null; editingSlot = -1 }
   onQueryChanged: selectedIndex = 0
 
   readonly property color contentForeground: bar ? bar.foreground : Color.foreground
@@ -114,6 +188,22 @@ Panel {
   function openView(name) {
     if (views.indexOf(name) >= 0) view = name
     if (!root.opened) open()
+  }
+
+  // By script: open on the root a query finds, the panel's own search's first answer.
+  function showRoot(query) {
+    if (!root.opened) open()
+    var hit = Model.search(index, String(query || ""), 1, forms)[0]
+    if (hit) Qt.callLater(function() { root.pick(hit) })
+  }
+
+  // Rings by script: an order (mushaf | length | first) and alignment.
+  function setRings(order, align) {
+    openView("rings")
+    Qt.callLater(function() {
+      if (["mushaf", "length", "first"].indexOf(order) >= 0) ringsBox.ringOrder = order
+      ringsBox.aligned = !!align
+    })
   }
 
   function openWithQuery(text) {
@@ -703,8 +793,9 @@ Panel {
             options: [
               { value: "verses", label: strings.t("view.verses") },
               { value: "companions", label: strings.t("view.companions") },
+              { value: "rings", label: strings.t("view.rings") },
               { value: "concordance", label: strings.t("view.concordance") },
-              { value: "distribution", label: strings.t("view.distribution") }
+              { value: "structure", label: strings.t("view.structure") }
             ]
             value: root.view
             foreground: root.contentForeground
@@ -715,7 +806,7 @@ Panel {
 
           PlainText {
             width: parent.width
-            visible: root.view !== "verses" && root.view !== "distribution" && !root.conc
+            visible: root.view !== "verses" && !root.conc
             wrapMode: Text.Wrap
             text: strings.t("view.unavailable")
             font.family: root.uiFont
@@ -1055,6 +1146,631 @@ Panel {
             }
           }
 
+          // ---- Concordance rings (the site's): every sūrah a ring, every
+          // āyah a tick, lit where the roots occur, cream where they meet ----
+          Column {
+            width: parent.width
+            spacing: Style.space(8)
+            visible: root.view === "rings" && !!root.conc
+
+            // The roots, as on the site: up to three, each in its ring
+            // colour. Click one to change it, × to drop it, + to add one.
+            Row {
+              anchors.horizontalCenter: parent.horizontalCenter
+              spacing: Style.space(5)
+
+              PlainText {
+                height: Style.space(22)
+                verticalAlignment: Text.AlignVCenter
+                text: strings.t("rings.roots").toUpperCase()
+                font.family: root.uiFont
+                font.pixelSize: Style.font.caption
+                color: root.dim
+              }
+
+              Repeater {
+                model: root.ringRoots
+
+                Rectangle {
+                  id: slotChip
+                  required property string modelData
+                  required property int index
+                  readonly property bool editing: root.editingSlot === index
+                  readonly property color tone: root.ringColour(index)
+                  width: slotRow.implicitWidth + 2 * Style.space(7)
+                  height: Style.space(22)
+                  radius: Style.space(4)
+                  color: editing ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.12) : "transparent"
+                  border.width: 1
+                  border.color: Qt.rgba(tone.r, tone.g, tone.b, editing ? 0.9 : 0.55)
+
+                  Row {
+                    id: slotRow
+                    anchors.centerIn: parent
+                    spacing: Style.space(6)
+
+                    PlainText {
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: slotChip.modelData
+                      font.family: root.arabicFont
+                      font.pixelSize: Style.font.title
+                      color: slotChip.tone
+
+                      MouseArea {
+                        anchors.fill: parent
+                        anchors.margins: -Style.space(4)
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: slotChip.editing ? root.stopEditingSlot() : root.editSlot(slotChip.index)
+                      }
+                    }
+
+                    PlainText {
+                      visible: root.ringRoots.length > 1
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: "×"
+                      font.family: root.uiFont
+                      font.pixelSize: Style.font.caption
+                      color: root.dim
+
+                      MouseArea {
+                        anchors.fill: parent
+                        anchors.margins: -Style.space(4)
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.removeSlot(slotChip.index)
+                      }
+                    }
+                  }
+                }
+              }
+
+              Rectangle {
+                visible: root.ringRoots.length < 3
+                width: Style.space(22)
+                height: Style.space(22)
+                radius: Style.space(4)
+                color: root.editingSlot === root.ringRoots.length ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.12) : "transparent"
+                border.width: 1
+                border.color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.14)
+
+                PlainText {
+                  anchors.centerIn: parent
+                  text: "+"
+                  font.family: root.uiFont
+                  font.pixelSize: Style.font.body
+                  color: root.dim
+                }
+
+                MouseArea {
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.editingSlot === root.ringRoots.length ? root.stopEditingSlot() : root.editSlot(root.ringRoots.length)
+                }
+              }
+            }
+
+            // Picking a root for a slot: type to search every root; empty,
+            // the root on show's strongest companions.
+            Column {
+              width: parent.width
+              spacing: Style.space(6)
+              visible: root.editingSlot >= 0
+
+              TextField {
+                id: slotField
+                width: parent.width
+                verticalPadding: Style.space(3)
+                placeholderText: strings.t("rings.pick")
+                foreground: root.contentForeground
+                font.family: root.uiFont
+                font.pixelSize: Style.font.bodySmall
+                onTextChanged: root.slotQuery = text
+                Keys.priority: Keys.BeforeItem
+                Keys.onPressed: function(event) {
+                  if (event.key === Qt.Key_Escape) {
+                    root.stopEditingSlot()
+                    event.accepted = true
+                  } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                    if (root.slotSuggestions.length) root.setSlot(root.editingSlot, root.slotSuggestions[0].bare)
+                    event.accepted = true
+                  }
+                }
+              }
+
+              Flow {
+                width: parent.width
+                spacing: Style.space(5)
+
+                Repeater {
+                  model: root.slotSuggestions
+
+                  Rectangle {
+                    id: suggestion
+                    required property var modelData
+                    width: suggestionRow.implicitWidth + 2 * Style.space(7)
+                    height: Style.space(24)
+                    radius: Style.space(4)
+                    color: "transparent"
+                    border.width: 1
+                    border.color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.14)
+
+                    Row {
+                      id: suggestionRow
+                      anchors.centerIn: parent
+                      spacing: Style.space(6)
+
+                      PlainText {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: suggestion.modelData.root
+                        font.family: root.arabicFont
+                        font.pixelSize: Style.font.title
+                        color: root.contentForeground
+                      }
+
+                      PlainText {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Model.shortMeaning(suggestion.modelData)
+                        font.family: root.uiFont
+                        font.pixelSize: Style.font.caption
+                        color: root.dim
+                      }
+                    }
+
+                    MouseArea {
+                      anchors.fill: parent
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: root.setSlot(root.editingSlot, suggestion.modelData.bare)
+                    }
+                  }
+                }
+              }
+            }
+
+            // The site's motions, as one line of small chips: travel (the
+            // three orders) and turn (align every first meeting at 12 o'clock).
+            Row {
+              anchors.horizontalCenter: parent.horizontalCenter
+              spacing: Style.space(5)
+
+              Repeater {
+                model: [
+                  { value: "mushaf", label: strings.t("rings.orderMushaf") },
+                  { value: "length", label: strings.t("rings.orderLength") },
+                  { value: "first", label: strings.t("rings.orderFirst") },
+                  { value: "align", label: ringsBox.aligned ? strings.t("rings.reset") : strings.t("rings.align") }
+                ]
+
+                Rectangle {
+                  id: motionChip
+                  required property var modelData
+                  required property int index
+                  readonly property bool chosen: modelData.value === "align" ? ringsBox.aligned : modelData.value === ringsBox.ringOrder
+                  width: motionLabel.implicitWidth + 2 * Style.space(7)
+                  height: Style.space(22)
+                  radius: Style.space(4)
+                  color: chosen ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.12) : "transparent"
+                  border.width: 1
+                  border.color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, chosen ? 0.3 : 0.14)
+
+                  PlainText {
+                    id: motionLabel
+                    anchors.centerIn: parent
+                    text: motionChip.modelData.label
+                    font.family: root.uiFont
+                    font.pixelSize: Style.font.caption
+                    color: motionChip.chosen ? root.contentForeground : root.dim
+                  }
+
+                  MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                      if (motionChip.modelData.value === "align") ringsBox.aligned = !ringsBox.aligned
+                      else ringsBox.ringOrder = motionChip.modelData.value
+                    }
+                  }
+                }
+              }
+            }
+
+            Item {
+              id: ringsBox
+              width: parent.width
+              height: width
+              LayoutMirroring.enabled: false
+
+              readonly property var sel: root.ringsSel
+              // "mushaf" (114 inside to 1 outside, the site's default),
+              // "length" or "first"; and whether first meetings are aligned.
+              property string ringOrder: "mushaf"
+              property bool aligned: false
+              // The rings inside to out, as they will stand once at rest.
+              property var order: []
+              // Per sūrah: where each ring moves from and to (radial slot,
+              // turn), with its delay and duration on the shared clock.
+              property var motion: ({})
+              property real clock: 0
+              property real total: 0
+              readonly property bool moving: motionClock.running
+
+              NumberAnimation {
+                id: motionClock
+                target: ringsBox
+                property: "clock"
+                from: 0
+                to: ringsBox.total
+                duration: ringsBox.total
+                easing.type: Easing.Linear
+              }
+
+              // A ring's slot and turn right now.
+              function now(n) {
+                var m = motion[n]
+                if (!m) return { slot: 0, turn: 0, travelling: false, settled: true }
+                var t = m.dur > 0 ? Math.max(0, Math.min(1, (clock - m.delay) / m.dur)) : 1
+                var e = Model.easeInOutCubic(t)
+                return { slot: m.i0 + (m.i1 - m.i0) * e, turn: m.r0 + (m.r1 - m.r0) * e, travelling: t < 1 && m.i0 !== m.i1, settled: t >= 1 }
+              }
+
+              // Set where every ring is headed. Animated: each starts from
+              // where it is now, so a new request mid-motion never snaps.
+              function retarget(animate) {
+                if (!sel) { order = []; motion = ({}); total = 0; motionClock.stop(); return }
+                var target = Model.ringOrder(sel.qualifying, ringOrder)
+                var next = {}
+                var longest = 0
+                var calm = Style.duration(600)
+                for (var k = 0; k < target.length; k++) {
+                  var ring = target[k]
+                  var turnTo = aligned ? Model.alignRotation(ring, gap) : 0
+                  var cur = animate && motion[ring.n] ? now(ring.n) : { slot: k, turn: turnTo }
+                  var travel = Math.abs(k - cur.slot), turn = Math.abs(turnTo - cur.turn)
+                  var delay = 0, dur = 0
+                  if (animate && calm > 0 && (travel > 1e-3 || turn > 1e-3)) {
+                    // Turning: 8 ms a ring, innermost first; travelling:
+                    // staggered by how far a ring goes.
+                    delay = (turn > 1e-3 ? k * 8 : 0) + (travel > 1e-3 ? Math.min(240, travel * 10) : 0)
+                    dur = Style.duration(travel > 1e-3 ? 700 : 600)
+                  }
+                  next[ring.n] = { i0: cur.slot, i1: k, r0: cur.turn, r1: turnTo, delay: delay, dur: dur }
+                  longest = Math.max(longest, delay + dur)
+                }
+                hoverRing = -1
+                hoverAyah = -1
+                order = target
+                motion = next
+                motionClock.stop()
+                clock = 0
+                total = longest
+                if (longest > 0) motionClock.restart()
+                else ringsCanvas.requestPaint()
+              }
+
+              onSelChanged: retarget(false)
+              onRingOrderChanged: retarget(true)
+              onAlignedChanged: retarget(true)
+              Component.onCompleted: retarget(false)
+              readonly property real cx: width / 2
+              readonly property real cy: height / 2
+              readonly property real outerR: Math.min(width, height) / 2 - Style.space(34)
+              // The hole is sized to the words in it: wide enough for the
+              // longest of the three centre lines (they sit up to ~26 px off
+              // centre), never less than the site's proportion, and capped
+              // so the rings keep most of the radius.
+              readonly property string glossLine: sel ? sel.roots.map(function(b) { return root.index && root.index.roots[b] ? Model.shortMeaning(root.index.roots[b]) : b }).join(" \u00b7 ") : ""
+              readonly property string summaryLine: sel ? strings.t("rings.summary").arg(root.n(sel.qualifying.length)).arg(root.n(sel.totalMeetings)) : ""
+              readonly property string rootsLine: sel ? sel.roots.join(" \u00b7 ") : ""
+              TextMetrics { id: glossMetrics; font.family: root.uiFont; font.pixelSize: Style.font.caption; text: ringsBox.glossLine }
+              TextMetrics { id: summaryMetrics; font.family: root.uiFont; font.pixelSize: Style.font.caption; text: ringsBox.summaryLine }
+              TextMetrics { id: rootsMetrics; font.family: root.arabicFont; font.pixelSize: Math.round(Style.font.title * 1.25); font.weight: Font.DemiBold; text: ringsBox.rootsLine }
+              readonly property real centreHalf: Math.max(glossMetrics.advanceWidth, summaryMetrics.advanceWidth, rootsMetrics.advanceWidth) / 2
+              readonly property real innerR: Math.min(outerR * 0.5, Math.max(outerR * 0.27, Math.sqrt(centreHalf * centreHalf + 26 * 26) + Style.space(8)))
+              readonly property real thick: order.length ? (outerR - innerR) / order.length : 0
+              // The gap at 12 o'clock, between 100 and 0.
+              readonly property real gap: 0.38
+              property int hoverRing: -1
+              property int hoverAyah: -1
+
+              function angleAt(pos) { return gap / 2 + pos * (2 * Math.PI - gap) }
+              // Canvas arcs start at 3 o'clock; ours at 12.
+              function arcAngle(a) { return a - Math.PI / 2 }
+
+              Canvas {
+                id: ringsCanvas
+                anchors.fill: parent
+                readonly property var deps: [ringsBox.motion, ringsBox.clock, ringsBox.width, root.contentForeground, root.accent, root.accent2, root.cream]
+                onDepsChanged: requestPaint()
+                onPaint: {
+                  var ctx = getContext("2d")
+                  ctx.reset()
+                  var B = ringsBox, order = B.order
+                  var fg = root.contentForeground
+                  var colours = [root.accent, root.accent2, root.contentForeground]
+                  var usable = 2 * Math.PI - B.gap
+                  var k, ring, i, r0, band, a, half, h
+
+                  // Scale: 0 to 100 round the outside, ticks every 10.
+                  ctx.strokeStyle = Qt.rgba(fg.r, fg.g, fg.b, 0.14)
+                  ctx.lineWidth = 1
+                  ctx.beginPath()
+                  ctx.arc(B.cx, B.cy, B.outerR + 16, B.arcAngle(B.gap / 2), B.arcAngle(2 * Math.PI - B.gap / 2))
+                  ctx.stroke()
+                  for (i = 0; i <= 10; i++) {
+                    a = B.angleAt(i / 10)
+                    ctx.beginPath()
+                    ctx.moveTo(B.cx + (B.outerR + 16) * Math.sin(a), B.cy - (B.outerR + 16) * Math.cos(a))
+                    ctx.lineTo(B.cx + (B.outerR + 20) * Math.sin(a), B.cy - (B.outerR + 20) * Math.cos(a))
+                    ctx.stroke()
+                  }
+                  // The marker at 12 o'clock.
+                  ctx.fillStyle = B.aligned ? root.cream : Qt.rgba(fg.r, fg.g, fg.b, 0.5)
+                  ctx.beginPath()
+                  ctx.moveTo(B.cx - 4, B.cy - B.outerR - 26)
+                  ctx.lineTo(B.cx + 4, B.cy - B.outerR - 26)
+                  ctx.lineTo(B.cx, B.cy - B.outerR - 20)
+                  ctx.closePath()
+                  ctx.fill()
+
+                  // Histogram of where the meetings fall, between rings and scale.
+                  // Hidden while rings move; dimmed once aligned, since its
+                  // positions describe the unturned rings.
+                  var hist = B.moving ? [] : root.ringsHist
+                  var hmax = Model.maxOf(hist)
+                  var histAlpha = B.aligned ? 0.12 : 0.32
+                  for (i = 0; i < hist.length; i++) {
+                    if (!hist[i]) continue
+                    a = B.angleAt((i + 0.5) / hist.length)
+                    half = usable / hist.length * 0.3
+                    h = 2 + 9 * hist[i] / Math.max(1, hmax)
+                    ctx.strokeStyle = Qt.rgba(fg.r, fg.g, fg.b, histAlpha)
+                    ctx.lineWidth = h
+                    ctx.beginPath()
+                    ctx.arc(B.cx, B.cy, B.outerR + 4 + h / 2, B.arcAngle(a - half), B.arcAngle(a + half))
+                    ctx.stroke()
+                  }
+
+                  for (k = 0; k < order.length; k++) {
+                    ring = order[k]
+                    var state = B.now(ring.n)
+                    var spin = state.turn
+                    r0 = B.innerR + state.slot * B.thick
+                    band = Math.max(0.6, B.thick * 0.82)
+                    // A travelling ring draws lighter, so crossings stay legible.
+                    ctx.globalAlpha = state.travelling ? 0.6 : 1
+                    // The track, cool for Makki and warm for Madani.
+                    var tint = ring.makkan ? root.accent2 : root.accent
+                    ctx.strokeStyle = Qt.rgba(tint.r, tint.g, tint.b, 0.07)
+                    ctx.lineWidth = band
+                    ctx.beginPath()
+                    ctx.arc(B.cx, B.cy, r0 + band / 2, B.arcAngle(B.gap / 2 + spin), B.arcAngle(2 * Math.PI - B.gap / 2 + spin))
+                    ctx.stroke()
+                    // Every āyah, taller for more words.
+                    half = usable / ring.ayahCount * 0.36
+                    ctx.strokeStyle = Qt.rgba(fg.r, fg.g, fg.b, 0.1)
+                    for (i = 0; i < ring.ayahCount; i++) {
+                      h = band * (0.3 + 0.7 * ring.words[i] / ring.maxWords)
+                      a = B.angleAt((i + 0.5) / ring.ayahCount) + spin
+                      ctx.lineWidth = h
+                      ctx.beginPath()
+                      ctx.arc(B.cx, B.cy, r0 + h / 2, B.arcAngle(a - half), B.arcAngle(a + half))
+                      ctx.stroke()
+                    }
+                    // Where the roots stand; cream where they all meet. Each
+                    // root has its own radial slot when the ring is thick enough.
+                    var slots = B.sel.roots.length
+                    for (i = 0; i < ring.hits.length; i++) {
+                      var hit = ring.hits[i]
+                      h = band * (0.3 + 0.7 * hit.words / ring.maxWords)
+                      a = B.angleAt(hit.pos) + spin
+                      if (hit.meeting) {
+                        ctx.strokeStyle = root.cream
+                        ctx.lineWidth = h
+                        ctx.beginPath()
+                        ctx.arc(B.cx, B.cy, r0 + h / 2, B.arcAngle(a - half * 1.15), B.arcAngle(a + half * 1.15))
+                        ctx.stroke()
+                        continue
+                      }
+                      if (slots > 1 && band >= 4) {
+                        for (var b = 0; b < slots; b++) {
+                          if (!(hit.mask & (1 << b))) continue
+                          ctx.strokeStyle = colours[b]
+                          ctx.lineWidth = h / slots
+                          ctx.beginPath()
+                          ctx.arc(B.cx, B.cy, r0 + h / slots * (b + 0.5), B.arcAngle(a - half), B.arcAngle(a + half))
+                          ctx.stroke()
+                        }
+                      } else {
+                        var first = 0
+                        while (!(hit.mask & (1 << first))) first++
+                        ctx.strokeStyle = colours[first]
+                        ctx.lineWidth = h
+                        ctx.beginPath()
+                        ctx.arc(B.cx, B.cy, r0 + h / 2, B.arcAngle(a - half), B.arcAngle(a + half))
+                        ctx.stroke()
+                      }
+                    }
+                  }
+
+                  ctx.globalAlpha = 1
+
+                  // Threads: each meeting to the nearest meeting on the next
+                  // ring out. They depend on neighbours, so they wait for rest.
+                  ctx.strokeStyle = Qt.rgba(fg.r, fg.g, fg.b, 0.13)
+                  ctx.lineWidth = 0.6
+                  for (k = 0; !B.moving && k + 1 < order.length; k++) {
+                    var here = order[k].meetings, next = order[k + 1].meetings
+                    if (!here.length || !next.length) continue
+                    var ra = B.innerR + (k + 0.5) * B.thick, rb = B.innerR + (k + 1.5) * B.thick
+                    for (i = 0; i < here.length; i++) {
+                      var best = next[0]
+                      for (var j = 1; j < next.length; j++)
+                        if (Math.abs(next[j].pos - here[i].pos) < Math.abs(best.pos - here[i].pos)) best = next[j]
+                      var a1 = B.angleAt(here[i].pos) + B.now(order[k].n).turn, a2 = B.angleAt(best.pos) + B.now(order[k + 1].n).turn
+                      ctx.beginPath()
+                      ctx.moveTo(B.cx + ra * Math.sin(a1), B.cy - ra * Math.cos(a1))
+                      ctx.lineTo(B.cx + rb * Math.sin(a2), B.cy - rb * Math.cos(a2))
+                      ctx.stroke()
+                    }
+                  }
+                }
+              }
+
+              // Hover: outline the āyah under the pointer, on its own layer so
+              // the rings never repaint.
+              Canvas {
+                id: ringsHover
+                anchors.fill: parent
+                readonly property var deps: [ringsBox.hoverRing, ringsBox.hoverAyah]
+                onDepsChanged: requestPaint()
+                onPaint: {
+                  var ctx = getContext("2d")
+                  ctx.reset()
+                  var B = ringsBox
+                  if (B.hoverRing < 0 || B.hoverAyah < 0) return
+                  var ring = B.order[B.hoverRing]
+                  if (!ring) return
+                  var spin = B.now(ring.n).turn
+                  var r0 = B.innerR + B.hoverRing * B.thick
+                  var band = Math.max(0.6, B.thick * 0.82)
+                  var half = (2 * Math.PI - B.gap) / ring.ayahCount * 0.5
+                  var a = B.angleAt((B.hoverAyah + 0.5) / ring.ayahCount) + spin
+                  var fg = root.contentForeground
+                  ctx.strokeStyle = Qt.rgba(fg.r, fg.g, fg.b, 0.18)
+                  ctx.lineWidth = Math.max(1, B.thick)
+                  ctx.beginPath()
+                  ctx.arc(B.cx, B.cy, r0 + band / 2, B.arcAngle(B.gap / 2 + spin), B.arcAngle(2 * Math.PI - B.gap / 2 + spin))
+                  ctx.stroke()
+                  ctx.strokeStyle = fg
+                  ctx.lineWidth = Math.max(2, band + 2)
+                  ctx.beginPath()
+                  ctx.arc(B.cx, B.cy, r0 + band / 2, B.arcAngle(a - Math.max(half, 0.012)), B.arcAngle(a + Math.max(half, 0.012)))
+                  ctx.stroke()
+                }
+              }
+
+              // Scale labels: 0 at the gap's right edge, 100 at its left.
+              Repeater {
+                model: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+
+                PlainText {
+                  required property int modelData
+                  readonly property real angle: ringsBox.angleAt(modelData / 100)
+                  x: ringsBox.cx + (ringsBox.outerR + 28) * Math.sin(angle) - implicitWidth / 2
+                  y: ringsBox.cy - (ringsBox.outerR + 28) * Math.cos(angle) - implicitHeight / 2
+                  text: root.n(modelData)
+                  font.family: root.uiFont
+                  font.pixelSize: Math.round(Style.font.caption * 0.9)
+                  color: root.faint
+                }
+              }
+
+              Column {
+                anchors.centerIn: parent
+                width: ringsBox.centreHalf * 2 + Style.space(4)
+                spacing: Style.space(2)
+
+                Row {
+                  anchors.horizontalCenter: parent.horizontalCenter
+                  spacing: Style.space(5)
+                  // The first root on the right, as Arabic reads.
+                  layoutDirection: Qt.RightToLeft
+
+                  Repeater {
+                    model: ringsBox.sel ? ringsBox.sel.roots : []
+
+                    PlainText {
+                      required property string modelData
+                      required property int index
+                      text: (index > 0 ? "· " : "") + modelData
+                      font.family: root.arabicFont
+                      font.pixelSize: Math.round(Style.font.title * 1.25)
+                      font.weight: Font.DemiBold
+                      color: index === 0 ? root.accent : (index === 1 ? root.accent2 : root.contentForeground)
+                    }
+                  }
+                }
+
+                PlainText {
+                  width: parent.width
+                  horizontalAlignment: Text.AlignHCenter
+                  elide: Text.ElideRight
+                  text: ringsBox.glossLine
+                  font.family: root.uiFont
+                  font.pixelSize: Style.font.caption
+                  color: root.dim
+                }
+
+                PlainText {
+                  width: parent.width
+                  horizontalAlignment: Text.AlignHCenter
+                  text: ringsBox.summaryLine
+                  font.family: root.uiFont
+                  font.pixelSize: Style.font.caption
+                  color: root.contentForeground
+                }
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                onPositionChanged: function(mouse) {
+                  var B = ringsBox
+                  if (B.moving) { B.hoverRing = -1; B.hoverAyah = -1; return }
+                  var dx = mouse.x - B.cx, dy = mouse.y - B.cy
+                  var r = Math.sqrt(dx * dx + dy * dy)
+                  var k = Math.floor((r - B.innerR) / Math.max(0.001, B.thick))
+                  if (k < 0 || k >= B.order.length) { B.hoverRing = -1; B.hoverAyah = -1; return }
+                  var ring = B.order[k]
+                  // Undo the ring's turn to find the position on it.
+                  var a = Math.atan2(dx, -dy) - B.now(ring.n).turn
+                  a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)
+                  if (a < B.gap / 2 || a > 2 * Math.PI - B.gap / 2) { B.hoverRing = -1; B.hoverAyah = -1; return }
+                  B.hoverRing = k
+                  B.hoverAyah = Math.min(ring.ayahCount - 1, Math.floor((a - B.gap / 2) / (2 * Math.PI - B.gap) * ring.ayahCount))
+                }
+                onExited: { ringsBox.hoverRing = -1; ringsBox.hoverAyah = -1 }
+              }
+            }
+
+            // What's under the pointer: the reference, and the āyah's words
+            // around the chosen roots.
+            PlainText {
+              width: parent.width
+              horizontalAlignment: Text.AlignHCenter
+              wrapMode: Text.Wrap
+              text: {
+                var B = ringsBox
+                var ring = B.hoverRing >= 0 ? B.order[B.hoverRing] : null
+                if (!ring || B.hoverAyah < 0) return strings.t("rings.caption")
+                var s = strings.t("rings.hover").arg(root.surahLabel(ring.n)).arg(root.n(ring.n)).arg(root.n(B.hoverAyah + 1))
+                for (var i = 0; i < ring.hits.length; i++)
+                  if (ring.hits[i].ayah === B.hoverAyah + 1 && ring.hits[i].meeting && B.sel.roots.length > 1) return s + "  ·  " + strings.t("rings.meeting")
+                return s
+              }
+              font.family: root.uiFont
+              font.pixelSize: Style.font.caption
+              color: ringsBox.hoverRing >= 0 ? root.contentForeground : root.dim
+            }
+
+            PlainText {
+              width: parent.width
+              visible: text !== ""
+              horizontalAlignment: Text.AlignHCenter
+              elide: Text.ElideMiddle
+              text: {
+                var B = ringsBox
+                if (B.hoverRing < 0 || B.hoverAyah < 0 || !root.hostWidget) return ""
+                var revision = root.hostWidget.textRevision
+                var words = root.hostWidget.concordanceText()
+                var ring = B.order[B.hoverRing]
+                if (!words || !ring || !words[ring.n - 1] || !words[ring.n - 1][B.hoverAyah]) return ""
+                return words[ring.n - 1][B.hoverAyah].join(" ")
+              }
+              font.family: root.arabicFont
+              font.pixelSize: Math.round(Style.font.title * 1.1)
+              color: root.contentForeground
+            }
+          }
+
           // ---- Concordance: every occurrence in its context ----
           Column {
             width: parent.width
@@ -1169,79 +1885,214 @@ Panel {
             }
           }
 
-          // ---- Distribution: across the sūrahs ----
+          // ---- Quran structure map (the site's, occurrence mode): the 114
+          // sūrahs round a clock face, length inward, the root's āyahs outward ----
           Column {
             width: parent.width
-            spacing: Style.space(14)
-            visible: root.view === "distribution"
+            spacing: Style.space(10)
+            visible: root.view === "structure" && !!root.conc
 
-            // Per thousand words: the 114 sūrahs as a grid, darker where the
-            // root is used more for the sūrah's length.
-            Column {
+            Item {
+              id: mapBox
               width: parent.width
-              spacing: Style.space(6)
-              visible: !!root.dist
+              height: width
+              LayoutMirroring.enabled: false
 
-              PanelSectionHeader {
-                text: strings.t("dist.density").toUpperCase()
-                foreground: root.contentForeground
-                fontFamily: root.uiFont
+              readonly property var map: root.structureData
+              readonly property real cx: width / 2
+              readonly property real cy: height / 2
+              // The site's world: arcs at 460-470, dots from 500 outward (up to
+              // 880). Scaled to the longest stack this root actually draws, so
+              // the map fills its square.
+              readonly property real extent: {
+                var longest = 0
+                if (map) for (var i = 0; i < map.surahs.length; i++) {
+                  var d = map.surahs[i].dots
+                  if (d > 1) longest = Math.max(longest, (d - 1) * Model.occurrenceStep(d))
+                }
+                return Math.max(640, 500 + longest + 14)
               }
+              readonly property real unit: (Math.min(width, height) / 2 - 4) / extent
+              readonly property real slot: 2 * Math.PI / 114
+              property int hovered: 0
 
-              Item {
-                width: parent.width
-                height: densityGrid.height
+              function px(angle, r) { return { x: cx + r * unit * Math.sin(angle), y: cy - r * unit * Math.cos(angle) } }
 
-                Grid {
-                  id: densityGrid
-                  anchors.horizontalCenter: parent.horizontalCenter
-                  columns: 19
-                  spacing: 2
-                  readonly property real cell: Math.floor((parent.width - 18 * spacing) / 19)
-
-                  Repeater {
-                    model: root.dist ? root.dist.density : []
-
-                    Rectangle {
-                      required property real modelData
-                      required property int index
-                      readonly property int surah: index + 1
-                      readonly property real level: root.densityMax > 0 ? modelData / root.densityMax : 0
-                      width: densityGrid.cell
-                      height: Math.round(densityGrid.cell * 0.72)
-                      radius: Style.space(2)
-                      color: root.hoveredCell === surah ? root.accent
-                        : (modelData > 0 ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.12 + 0.75 * Math.sqrt(level))
-                          : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.04))
+              Canvas {
+                anchors.fill: parent
+                readonly property var deps: [mapBox.map, mapBox.hovered, mapBox.width, root.contentForeground, root.accent, root.accent2, root.cream]
+                onDepsChanged: requestPaint()
+                onPaint: {
+                  var ctx = getContext("2d")
+                  ctx.reset()
+                  var M = mapBox, map = M.map
+                  if (!map) return
+                  var fg = root.contentForeground
+                  for (var i = 0; i < map.surahs.length; i++) {
+                    var s = map.surahs[i]
+                    var mid = (s.n - 0.5) * M.slot
+                    var half = M.slot / 2 * 0.84
+                    var hot = M.hovered === s.n
+                    var tone = s.makkan ? root.accent2 : root.accent
+                    var a0 = mid - half - Math.PI / 2, a1 = mid + half - Math.PI / 2
+                    // The arc: the sūrah itself, Makki or Madani.
+                    ctx.strokeStyle = Qt.rgba(tone.r, tone.g, tone.b, hot ? 1 : (s.dots ? 0.85 : 0.45))
+                    ctx.lineWidth = 10 * M.unit
+                    ctx.beginPath()
+                    ctx.arc(M.cx, M.cy, 465 * M.unit, a0, a1)
+                    ctx.stroke()
+                    // Inward: its length in words.
+                    var len = s.bar * 120
+                    ctx.strokeStyle = Qt.rgba(tone.r, tone.g, tone.b, hot ? 0.6 : 0.22)
+                    ctx.lineWidth = len * M.unit
+                    ctx.beginPath()
+                    ctx.arc(M.cx, M.cy, (460 - 7 - len / 2) * M.unit, mid - half * 0.8 - Math.PI / 2, mid + half * 0.8 - Math.PI / 2)
+                    ctx.stroke()
+                    // Outward: a dot per āyah holding the root.
+                    if (s.dots) {
+                      var step = Model.occurrenceStep(s.dots)
+                      ctx.fillStyle = hot ? fg : root.cream
+                      for (var d = 0; d < s.dots; d++) {
+                        var p = M.px(mid, 500 + d * step)
+                        ctx.beginPath()
+                        ctx.arc(p.x, p.y, Math.max(1, 3.4 * M.unit), 0, 2 * Math.PI)
+                        ctx.fill()
+                      }
                     }
                   }
-                }
-
-                MouseArea {
-                  anchors.fill: densityGrid
-                  hoverEnabled: true
-                  onPositionChanged: function(mouse) {
-                    var cell = densityGrid.childAt(mouse.x, mouse.y)
-                    root.hoveredCell = cell && cell.surah ? cell.surah : 0
+                  // The current verse's sūrah, as in the strip: a tick inside.
+                  if (root.activeSura > 0) {
+                    var am = (root.activeSura - 0.5) * M.slot
+                    var q0 = M.px(am, 336), q1 = M.px(am, 452)
+                    ctx.strokeStyle = root.accent
+                    ctx.lineWidth = 2
+                    ctx.beginPath()
+                    ctx.moveTo(q0.x, q0.y)
+                    ctx.lineTo(q1.x, q1.y)
+                    ctx.stroke()
                   }
-                  onExited: root.hoveredCell = 0
                 }
               }
 
-              PlainText {
-                width: parent.width
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.Wrap
-                text: root.hoveredCell > 0 && root.dist
-                  ? strings.t("dist.densityHover").arg(root.surahLabel(root.hoveredCell)).arg(root.n(root.hoveredCell))
-                      .arg(Commons.I18n.formatNumber(root.dist.density[root.hoveredCell - 1], 1))
-                  : strings.t("dist.densityCaption")
-                font.family: root.uiFont
-                font.pixelSize: Style.font.caption
-                color: root.hoveredCell > 0 ? root.contentForeground : root.dim
+              // A few sūrah numbers round the face, like a clock's hours.
+              Repeater {
+                model: [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+
+                PlainText {
+                  required property int modelData
+                  // Inside the length bars, which reach in to 333.
+                  readonly property var at: mapBox.px((modelData - 0.5) * mapBox.slot, 300)
+                  x: at.x - implicitWidth / 2
+                  y: at.y - implicitHeight / 2
+                  text: root.n(modelData)
+                  font.family: root.uiFont
+                  font.pixelSize: Math.round(Style.font.caption * 0.9)
+                  color: root.faint
+                }
+              }
+
+              Column {
+                anchors.centerIn: parent
+                width: 600 * mapBox.unit
+                spacing: Style.space(3)
+
+                PlainText {
+                  width: parent.width
+                  horizontalAlignment: Text.AlignHCenter
+                  visible: mapBox.hovered > 0
+                  text: strings.t("structure.surah").arg(root.n(mapBox.hovered)).toUpperCase()
+                  font.family: root.uiFont
+                  font.pixelSize: Style.font.caption
+                  color: root.dim
+                }
+
+                PlainText {
+                  width: parent.width
+                  horizontalAlignment: Text.AlignHCenter
+                  text: mapBox.hovered > 0 ? Model.surahName(mapBox.hovered, false) : (root.shown ? root.shown.root : "")
+                  font.family: mapBox.hovered > 0 ? root.uiFont : root.arabicFont
+                  font.pixelSize: mapBox.hovered > 0 ? Style.font.title : Math.round(Style.font.title * 1.6)
+                  font.weight: Font.DemiBold
+                  color: root.contentForeground
+                }
+
+                PlainText {
+                  width: parent.width
+                  horizontalAlignment: Text.AlignHCenter
+                  visible: mapBox.hovered > 0
+                  text: mapBox.hovered > 0 ? Model.surahName(mapBox.hovered, true) : ""
+                  font.family: root.arabicFont
+                  font.pixelSize: Math.round(Style.font.title * 1.3)
+                  color: root.contentForeground
+                }
+
+                PlainText {
+                  width: parent.width
+                  horizontalAlignment: Text.AlignHCenter
+                  wrapMode: Text.Wrap
+                  text: {
+                    var map = mapBox.map
+                    if (!map) return ""
+                    if (mapBox.hovered > 0) {
+                      var s = map.surahs[mapBox.hovered - 1]
+                      return strings.t("structure.hover").arg(root.n(s.ayahs)).arg(root.n(s.dots))
+                    }
+                    return strings.t("structure.summary").arg(root.n(map.surahsWithRoot)).arg(root.n(map.ayahsWithRoot))
+                  }
+                  font.family: root.uiFont
+                  font.pixelSize: Style.font.caption
+                  color: root.dim
+                }
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                onPositionChanged: function(mouse) {
+                  var dx = mouse.x - mapBox.cx, dy = mouse.y - mapBox.cy
+                  var r = Math.sqrt(dx * dx + dy * dy) / mapBox.unit
+                  if (r < 330 || r > mapBox.extent) { mapBox.hovered = 0; return }
+                  var a = Math.atan2(dx, -dy)
+                  if (a < 0) a += 2 * Math.PI
+                  mapBox.hovered = Math.min(114, Math.floor(a / mapBox.slot) + 1)
+                }
+                onExited: mapBox.hovered = 0
               }
             }
 
+            // Legend: Makki and Madani, as the arcs are tinted.
+            Row {
+              anchors.horizontalCenter: parent.horizontalCenter
+              spacing: Style.space(14)
+
+              Repeater {
+                model: [
+                  { tone: root.accent2, label: strings.t("structure.makki") },
+                  { tone: root.accent, label: strings.t("structure.madani") },
+                  { tone: root.cream, label: strings.t("structure.dot") }
+                ]
+
+                Row {
+                  required property var modelData
+                  spacing: Style.space(5)
+
+                  Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Style.space(8)
+                    height: Style.space(8)
+                    radius: Style.space(2)
+                    color: modelData.tone
+                  }
+
+                  PlainText {
+                    text: modelData.label
+                    font.family: root.uiFont
+                    font.pixelSize: Style.font.caption
+                    color: root.dim
+                  }
+                }
+              }
+            }
             // Makkan / Madinan, against how much of the text each holds.
             Column {
               width: parent.width

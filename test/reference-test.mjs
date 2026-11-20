@@ -115,6 +115,24 @@ if (concPath) {
       check((s.revelationPlace === "makkah") === M.isMakkan(s.n), `revelation place of sūrah ${s.n}`)
     }
   }
+  // The rings: the site's documented presets and today's pairs, sūrah by
+  // sūrah, against selectConcordance.
+  const pairs = [["غفر", "رحم"], ["خلق", "سمو", "ارض"], ["امن", "عمل", "صلح"], ["عذب", "الم"], ["حيي", "دنو"],
+    ["جنن", "جري", "نهر"], ["نزل", "سمو", "موه"], ["شمس", "قمر"], ["خير"], ["خير", "اله"], ["صبر", "اجر"]]
+  for (const pair of pairs) {
+    const ids = pair.map((b) => rawConc.roots.findIndex((r) => r.bare === b))
+    for (const meetIn of ["ayah", "surah"]) {
+      const site = siteConc.selectConcordance(rawConc, ids, meetIn)
+      const mine = M.concordanceRings(conc, pair, meetIn)
+      check(site.qualifying.length === mine.qualifying.length, `rings ${pair.join("·")} ${meetIn}: sūrahs ${site.qualifying.length} vs ${mine.qualifying.length}`)
+      check(site.totalMeetings === mine.totalMeetings, `rings ${pair.join("·")} ${meetIn}: meetings ${site.totalMeetings} vs ${mine.totalMeetings}`)
+      for (let s = 0; s < 114; s++) {
+        const a = site.surahs[s], b = mine.rings[s]
+        check(a.maxWords === b.maxWords && a.hits.length === b.hits.length && a.hits.every((h, i) => h.ayah === b.hits[i].ayah && h.mask === b.hits[i].mask && h.pos === b.hits[i].pos && h.meeting === b.hits[i].meeting),
+          `rings ${pair.join("·")} sūrah ${s + 1}`)
+      }
+    }
+  }
   concChecked = true
 }
 

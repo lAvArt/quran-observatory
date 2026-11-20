@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "io.github.lavart.quran-observatory",
   "name": "Quran Observatory",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "author": "lAvArt Studio",
-  "description": "Today's Quranic root in the bar, from quranobservatory.org: its meaning and occurrences, example verses, companion roots, a concordance, its spread across the surahs, and an offline root search.",
+  "description": "Today's Quranic root in the bar, from quranobservatory.org: its meaning and occurrences, example verses, the collocation burst, concordance rings, a concordance, the Quran structure map, and an offline root search.",
   "kinds": [
     "bar-widget"
   ],
