@@ -79,5 +79,28 @@
   "verses.reference": "%1 %2:%3",
   "verses.none": "Example verses come with the featured roots. Open the root on the site for every occurrence.",
   "verses.noneFirst": "First appears in %1 %2:%3. Example verses come with the featured roots; open the root on the site for every occurrence.",
-  "footer.source": "Data from quranobservatory.org, built on the Quranic Arabic Corpus (University of Leeds)"
+  "footer.source": "Data from quranobservatory.org, built on the Quranic Arabic Corpus (University of Leeds)",
+  "view.verses": "Verses",
+  "view.companions": "Companions",
+  "view.concordance": "Concordance",
+  "view.distribution": "Distribution",
+  "view.unavailable": "The concordance data hasn't downloaded yet.",
+  "companions.caption": "The roots it shares the most verses with · heavier lines, more verses in common",
+  "companions.hover": {
+    "one": "%1 and %2 share %3 verse",
+    "other": "%1 and %2 share %3 verses"
+  },
+  "companions.none": "This root doesn't share enough verses with others to show companions.",
+  "concordance.caption": {
+    "one": "%1 occurrence across %2 verses",
+    "other": "%1 occurrences across %2 verses"
+  },
+  "dist.perSurah": "Occurrences per surah",
+  "dist.density": "Per 1,000 words",
+  "dist.densityCaption": "Darker cells use the root more for their length",
+  "dist.densityHover": "%1 (%2) · %3 per 1,000 words",
+  "dist.split": "Makkan and Madinan",
+  "dist.makkan": "Makkan %1% · %2",
+  "dist.madinan": "Madinan %1% · %2",
+  "dist.wordShare": "The mark shows where an even spread would split: Makkan surahs hold %1% of the Quran's words."
 }

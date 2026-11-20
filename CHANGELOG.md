@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.0 (2026-11-20)
+
+- Diagrams under the root, one at a time: Verses, Companions (a network of
+  the roots it shares the most verses with, ranked by local mutual
+  information; click one to move to it), Concordance (every occurrence in
+  context) and Distribution (per-sūrah counts, a per-1,000-words grid, and
+  the Makkan / Madinan split against an even spread).
+- The bar label sits in a faint, softly rounded frame (Bar style: Chip),
+  with the occurrence count in a small badge; Plain keeps the old look.
+- Downloads the site's concordance files too (about 3.5 MB in all); the
+  diagrams are computed offline from them.
+- `qs ipc call … view <name>` opens the panel on a diagram.
+
 ## 1.0.0 (2026-11-20)
 
 - Today's root in the bar, the same one the site's homepage shows, with its

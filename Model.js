@@ -11,6 +11,8 @@
 var SITE = "https://www.quranobservatory.org"
 var DATA_URL = SITE + "/data/root-stats.json"
 var FORMS_URL = SITE + "/data/form-index.json"
+var CONCORDANCE_URL = SITE + "/data/concordance.json"
+var CONCORDANCE_TEXT_URL = SITE + "/data/concordance-text.json"
 
 // Everything downloaded is bounded before it reaches the screen.
 var LIMITS = {
@@ -531,6 +533,14 @@ function meaning(root) {
   return root.gloss || root.translit
 }
 
+// The first sense only ("to believe / trust" -> "to believe"), for labels
+// with room for a word or two.
+function shortMeaning(root) {
+  if (!root) return ""
+  if (root.gloss) return root.gloss.split(/\s*[\/;]\s*/)[0]
+  return root.translit
+}
+
 var LABEL_STYLES = ["Root and meaning", "Root", "Transliteration and meaning", "Icon only"]
 
 // The bar label without its direction mark; the QML adds one for the
@@ -582,6 +592,223 @@ function searchUrl(query, lang) {
   return SITE + "/" + (lang === "ar" ? "ar" : "en") + "/search?q=" + encodeURIComponent(String(query || ""))
 }
 
+// ---- Concordance ----------------------------------------------------------
+//
+// concordance.json maps every word of every āyah to its root (an index into
+// its own root list, -1 for a word without one); concordance-text.json holds
+// the words themselves, in the same shape. Together they answer what the
+// root index alone cannot: which roots share āyahs with this one, every
+// occurrence in context, and how it spreads across the sūrahs.
+
+// K = Makkan, D = Madinan, sūrah 1 first. From the site's surahData.ts.
+var REVELATION = "KDDDDKKDDKKKDKKKKKKKKDKDKKKKKKKKDKKKKKKKKKKKKKDDDKKKKKDKDDDDDDDDDDKKKKKKKKKDKKKKKKKKKKKKKKKKKKKKKDDKKKKKKKKKKDKKKK"
+
+function isMakkan(surah) {
+  return REVELATION.charAt(surah - 1) === "K"
+}
+
+var CONCORDANCE_LIMITS = { ayahs: 7000, ayahsPerSurah: 300, wordsPerAyah: 200 }
+
+// { roots: [bare], lookup: {bare: index}, surahs: [[[rootIndex]]], words:
+// [per-sūrah word count], totalWords, totalAyahs }, or null. Root indices
+// stay aligned with the file even when an entry is rejected; words pointing
+// at a rejected or out-of-range root count as rootless.
+function sanitizeConcordance(raw) {
+  if (!raw || typeof raw !== "object" || !Array.isArray(raw.roots) || !Array.isArray(raw.surahs)) return null
+  if (raw.surahs.length !== SURAH_COUNT || raw.roots.length > LIMITS.roots) return null
+
+  var roots = []
+  var lookup = Object.create(null)
+  for (var r = 0; r < raw.roots.length; r++) {
+    var entry = raw.roots[r]
+    var bare = entry && typeof entry === "object" && typeof entry.bare === "string" && ROOT_KEY.test(entry.bare) ? entry.bare : ""
+    roots.push(bare)
+    if (bare && lookup[bare] === undefined) lookup[bare] = r
+  }
+
+  var surahs = []
+  var words = []
+  var totalWords = 0
+  var totalAyahs = 0
+  for (var s = 0; s < SURAH_COUNT; s++) {
+    var rs = raw.surahs[s]
+    if (!rs || typeof rs !== "object" || !Array.isArray(rs.ayahs) || !rs.ayahs.length || rs.ayahs.length > CONCORDANCE_LIMITS.ayahsPerSurah) return null
+    var ayahs = []
+    var count = 0
+    for (var a = 0; a < rs.ayahs.length; a++) {
+      var ra = rs.ayahs[a]
+      if (!Array.isArray(ra) || ra.length > CONCORDANCE_LIMITS.wordsPerAyah) return null
+      var ayah = []
+      for (var w = 0; w < ra.length; w++) {
+        var v = ra[w]
+        ayah.push(typeof v === "number" && v >= 0 && v < roots.length && v === Math.floor(v) && roots[v] ? v : -1)
+      }
+      ayahs.push(ayah)
+      count += ayah.length
+    }
+    totalAyahs += ayahs.length
+    if (totalAyahs > CONCORDANCE_LIMITS.ayahs) return null
+    surahs.push(ayahs)
+    words.push(count)
+    totalWords += count
+  }
+  return { roots: roots, lookup: lookup, surahs: surahs, words: words, totalWords: totalWords, totalAyahs: totalAyahs }
+}
+
+function parseConcordance(text) {
+  if (typeof text !== "string" || !text.length || text.length > LIMITS.bytes) return null
+  var raw
+  try { raw = JSON.parse(text) } catch (e) { return null }
+  return sanitizeConcordance(raw)
+}
+
+// The words of every āyah, or null unless they line up word for word with
+// the concordance: a word's root is found by its position.
+function sanitizeConcordanceText(raw, conc) {
+  if (!conc || !raw || typeof raw !== "object" || !Array.isArray(raw.surahs) || raw.surahs.length !== SURAH_COUNT) return null
+  var out = []
+  for (var s = 0; s < SURAH_COUNT; s++) {
+    var rs = raw.surahs[s]
+    if (!Array.isArray(rs) || rs.length !== conc.surahs[s].length) return null
+    var ayahs = []
+    for (var a = 0; a < rs.length; a++) {
+      var ra = rs[a]
+      if (!Array.isArray(ra) || ra.length !== conc.surahs[s][a].length) return null
+      var ayah = []
+      for (var w = 0; w < ra.length; w++) ayah.push(cleanString(ra[w], LIMITS.word))
+      ayahs.push(ayah)
+    }
+    out.push(ayahs)
+  }
+  return out
+}
+
+function parseConcordanceText(text, conc) {
+  if (!conc || typeof text !== "string" || !text.length || text.length > LIMITS.bytes) return null
+  var raw
+  try { raw = JSON.parse(text) } catch (e) { return null }
+  return sanitizeConcordanceText(raw, conc)
+}
+
+// Every āyah holding the root, in mushaf order, with the word positions
+// (0-based) where it stands.
+function rootOccurrences(conc, bare) {
+  if (!conc || conc.lookup[bare] === undefined) return []
+  var target = conc.lookup[bare]
+  var out = []
+  for (var s = 0; s < SURAH_COUNT; s++) {
+    var ayahs = conc.surahs[s]
+    for (var a = 0; a < ayahs.length; a++) {
+      var positions = null
+      for (var w = 0; w < ayahs[a].length; w++) {
+        if (ayahs[a][w] === target) (positions || (positions = [])).push(w)
+      }
+      if (positions) out.push({ s: s + 1, a: a + 1, positions: positions })
+    }
+  }
+  return out
+}
+
+// The roots that keep this one company: shared āyahs, ranked by local mutual
+// information (shared × PMI). Plain counts would always crown the commonest
+// roots (God, say, be); plain PMI, a root met three times. versesOf(bare)
+// gives a root's āyah count; roots sharing fewer than minShared are left out.
+function companions(conc, bare, versesOf, limit, minShared) {
+  var occ = rootOccurrences(conc, bare)
+  if (!occ.length) return []
+  var target = conc.lookup[bare]
+  var max = limit > 0 ? limit : 8
+  var floor = minShared > 0 ? minShared : 3
+  var shared = Object.create(null)
+  for (var i = 0; i < occ.length; i++) {
+    var ayah = conc.surahs[occ[i].s - 1][occ[i].a - 1]
+    var seen = Object.create(null)
+    for (var w = 0; w < ayah.length; w++) {
+      var r = ayah[w]
+      if (r < 0 || r === target || seen[r]) continue
+      seen[r] = true
+      shared[r] = (shared[r] || 0) + 1
+    }
+  }
+  var n = conc.totalAyahs
+  var fx = occ.length
+  var out = []
+  for (var key in shared) {
+    var count = shared[key]
+    if (count < floor) continue
+    var other = conc.roots[key]
+    var fy = versesOf(other)
+    if (!(fy > 0)) continue
+    var pmi = Math.log(count * n / (fx * fy)) / Math.LN2
+    if (pmi <= 0) continue
+    out.push({ bare: other, shared: count, score: count * pmi })
+  }
+  out.sort(function(x, y) { return y.score - x.score || y.shared - x.shared })
+  return out.slice(0, max)
+}
+
+// Keyword-in-context: one line per occurrence, with up to `context` words
+// either side. Lines run in mushaf order.
+function concordanceLines(conc, text, bare, context, limit) {
+  if (!text) return []
+  var occ = rootOccurrences(conc, bare)
+  var span = context > 0 ? context : 4
+  var max = limit > 0 ? limit : 5000
+  var out = []
+  for (var i = 0; i < occ.length && out.length < max; i++) {
+    var words = text[occ[i].s - 1][occ[i].a - 1]
+    for (var p = 0; p < occ[i].positions.length && out.length < max; p++) {
+      var at = occ[i].positions[p]
+      out.push({
+        s: occ[i].s,
+        a: occ[i].a,
+        before: words.slice(Math.max(0, at - span), at).join(" "),
+        word: words[at],
+        after: words.slice(at + 1, at + 1 + span).join(" "),
+        clippedBefore: at - span > 0,
+        clippedAfter: at + 1 + span < words.length
+      })
+    }
+  }
+  return out
+}
+
+// How the root spreads: occurrences per sūrah, the same per thousand words
+// (so long sūrahs don't win by length), and the Makkan / Madinan split set
+// against how much of the text each group holds.
+function distribution(conc, bare) {
+  var counts = []
+  for (var i = 0; i < SURAH_COUNT; i++) counts.push(0)
+  var occ = rootOccurrences(conc, bare)
+  for (var o = 0; o < occ.length; o++) counts[occ[o].s - 1] += occ[o].positions.length
+  var density = []
+  var makkan = 0
+  var madinan = 0
+  var makkanWords = 0
+  var total = 0
+  for (var s = 0; s < SURAH_COUNT; s++) {
+    var words = conc ? conc.words[s] : 0
+    density.push(words > 0 ? counts[s] * 1000 / words : 0)
+    total += counts[s]
+    if (isMakkan(s + 1)) { makkan += counts[s]; makkanWords += words } else madinan += counts[s]
+  }
+  return {
+    counts: counts,
+    density: density,
+    total: total,
+    makkan: makkan,
+    madinan: madinan,
+    makkanShare: total > 0 ? makkan / total : 0,
+    makkanWordShare: conc && conc.totalWords > 0 ? makkanWords / conc.totalWords : 0
+  }
+}
+
+function maxOf(values) {
+  var m = 0
+  for (var i = 0; i < values.length; i++) if (values[i] > m) m = values[i]
+  return m
+}
+
 // ---- Updates --------------------------------------------------------------
 
 var UPDATE_INTERVALS = { "Daily": 86400, "Weekly": 7 * 86400, "Off": 0 }
@@ -608,6 +835,8 @@ if (typeof module !== "undefined") {
     SITE: SITE,
     DATA_URL: DATA_URL,
     FORMS_URL: FORMS_URL,
+    CONCORDANCE_URL: CONCORDANCE_URL,
+    CONCORDANCE_TEXT_URL: CONCORDANCE_TEXT_URL,
     LIMITS: LIMITS,
     SURAHS: SURAHS,
     LABEL_STYLES: LABEL_STYLES,
@@ -628,6 +857,7 @@ if (typeof module !== "undefined") {
     verseWords: verseWords,
     compactTranslit: compactTranslit,
     meaning: meaning,
+    shortMeaning: shortMeaning,
     barLabel: barLabel,
     todayText: todayText,
     histogramLevels: histogramLevels,
@@ -635,6 +865,17 @@ if (typeof module !== "undefined") {
     siteLanguage: siteLanguage,
     rootUrl: rootUrl,
     searchUrl: searchUrl,
+    REVELATION: REVELATION,
+    isMakkan: isMakkan,
+    sanitizeConcordance: sanitizeConcordance,
+    parseConcordance: parseConcordance,
+    sanitizeConcordanceText: sanitizeConcordanceText,
+    parseConcordanceText: parseConcordanceText,
+    rootOccurrences: rootOccurrences,
+    companions: companions,
+    concordanceLines: concordanceLines,
+    distribution: distribution,
+    maxOf: maxOf,
     needsDownload: needsDownload,
     moveSelection: moveSelection
   }

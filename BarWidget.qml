@@ -26,6 +26,8 @@ BarWidget {
 
   readonly property var index: data.index
   readonly property var forms: data.forms
+  readonly property var concordance: data.concordance
+  readonly property int textRevision: data.textRevision
   readonly property string dataStatus: data.status
   readonly property bool dataBusy: data.busy
   readonly property bool updatesOff: data.updateInterval === "Off"
@@ -33,12 +35,12 @@ BarWidget {
 
   readonly property string icon: ""
 
-  // A direction mark first, so the Arabic root and the English gloss sit in
-  // reading order for the interface language whichever comes first.
   // "196×": how often today's root occurs, shown after it unless turned off.
   readonly property bool showCount: String(setting("showCount", "On")) !== "Off"
   readonly property string countText: today && showCount ? strings.t("result.count").arg(Commons.I18n.formatNumber(today.count)) : ""
 
+  // A direction mark first, so the Arabic root and the English gloss sit in
+  // reading order for the interface language whichever comes first.
   readonly property string labelText: {
     var s = Model.barLabel(today, labelStyle, countText)
     if (!s) return ""
@@ -54,6 +56,7 @@ BarWidget {
   }
 
   function refreshData() { data.refresh(true) }
+  function concordanceText() { return data.concordanceText() }
 
   function openRootOnSite(bare) {
     var target = bare || (today ? today.bare : "")
@@ -68,6 +71,7 @@ BarWidget {
   function close() { if (panelLoader.item) panelLoader.item.close() }
   function togglePanel() { if (panelLoader.item) panelLoader.item.toggle() }
   function openSearch(query) { if (panelLoader.item) panelLoader.item.openWithQuery(String(query || "")) }
+  function openView(name) { if (panelLoader.item) panelLoader.item.openView(String(name || "")) }
 
   readonly property real openPanelIndicatorWidth: customLabel ? customRow.implicitWidth
     : (button.labelWidth > 0 ? button.labelWidth : Math.max(Style.space(10), Math.round(Style.bar.iconSlot * 0.55)))
@@ -121,6 +125,8 @@ BarWidget {
     function today(): string { return Model.todayText(root.today) }
     function refresh(): void { root.refreshData() }
     function search(query: string): void { root.openSearch(query) }
+    // verses | companions | concordance | distribution
+    function view(name: string): void { root.openView(name) }
     function open(): void { root.open() }
     function close(): void { root.close() }
     function show(): void { root.open() }
@@ -128,13 +134,28 @@ BarWidget {
     function toggle(): void { root.togglePanel() }
   }
 
-  // Labels with Arabic in them are drawn here rather than by WidgetButton:
-  // its single bar-font Text leaves the root to a fallback font whose taller
-  // line box lifts the gloss off the bar's baseline. Here the root gets a
-  // real Arabic font and sits on the gloss's baseline, and the pair is
-  // centred on figure height exactly as WidgetButton centres its own label.
-  readonly property bool customLabel: !vertical && !!today && (labelStyle === "Root and meaning" || labelStyle === "Root")
-  readonly property string glossText: today ? (today.gloss || Model.compactTranslit(today.translit)) : ""
+  // ---- The label.
+  //
+  // "Chip" (the default) sets the widget apart from the plain-text clock and
+  // indicators around it: a faint, softly rounded frame in the bar's own
+  // foreground (no theme colour), a hairline before the meaning, and the
+  // count in a small badge. "Plain" is the same content without the frame.
+  //
+  // Either way the label is drawn here rather than by WidgetButton: its single
+  // bar-font Text leaves the Arabic to a fallback font whose taller line box
+  // lifts the rest off the bar's baseline. Here the root gets a real Arabic
+  // font and sits on the meaning's baseline, centred on figure height the way
+  // WidgetButton centres its own labels.
+  readonly property bool chip: String(setting("barStyle", "Chip")) !== "Plain"
+  readonly property bool arabicRoot: labelStyle === "Root and meaning" || labelStyle === "Root"
+  readonly property bool customLabel: !vertical && !!today && labelStyle !== "Icon only" && (chip || arabicRoot)
+  readonly property bool showsMeaning: labelStyle !== "Root" && glossText !== ""
+  readonly property string glossText: {
+    if (!today) return ""
+    if (labelStyle === "Transliteration and meaning") return today.gloss
+    return today.gloss || Model.compactTranslit(today.translit)
+  }
+  readonly property bool hot: button.tooltipHovered || opened
 
   WidgetButton {
     id: button
@@ -143,7 +164,7 @@ BarWidget {
     text: root.customLabel ? "" : (root.vertical || root.labelText === "" ? root.icon : root.labelText)
     labelVisible: !root.customLabel
     hasVisualContent: root.customLabel || text !== ""
-    fixedWidth: root.customLabel ? Math.ceil(customRow.implicitWidth + 2 * scaledHorizontalMargin) : -1
+    fixedWidth: root.customLabel ? Math.ceil(capsule.width + 2 * Style.space(root.chip ? 4 : 8.75)) : -1
     tooltipText: root.opened ? "" : root.tooltipText
     horizontalMargin: 8.75
     verticalPadding: 8.75
@@ -159,47 +180,94 @@ BarWidget {
       font.pixelSize: button.fontSize
     }
 
-    Item {
-      id: customLabelBox
+    // Neutral on purpose: a faint tint of the bar's own foreground and a
+    // hairline edge, so it reads as one unit without competing with the theme.
+    Rectangle {
+      id: capsule
       visible: root.customLabel
       anchors.centerIn: parent
-      anchors.verticalCenterOffset: (barMetrics.descent - barMetrics.ascent + barMetrics.tightBoundingRect("0").height) / 2
-      width: customRow.implicitWidth
-      height: glossLabel.implicitHeight
+      width: customRow.implicitWidth + (root.chip ? 2 * Style.space(10) : 0)
+      height: Math.round(Math.min(button.height - 2, Style.bar.sizeHorizontal * 0.88))
+      radius: Style.space(5)
       scale: button.pressScale
+      color: root.chip ? Qt.rgba(button.foreground.r, button.foreground.g, button.foreground.b, root.hot ? 0.12 : 0.06) : "transparent"
+      border.width: root.chip ? 1 : 0
+      border.color: Qt.rgba(button.foreground.r, button.foreground.g, button.foreground.b, root.hot ? 0.34 : 0.18)
+      Behavior on color { ColorAnimation { duration: Style.duration(140) } }
 
-      Row {
-        id: customRow
-        spacing: Style.space(6)
+      Item {
+        anchors.centerIn: parent
+        anchors.verticalCenterOffset: (barMetrics.descent - barMetrics.ascent + barMetrics.tightBoundingRect("0").height) / 2
+        width: customRow.implicitWidth
+        height: glossLabel.implicitHeight
 
-        PlainText {
-          id: rootLabel
-          anchors.baseline: glossLabel.baseline
-          text: root.today ? root.today.root : ""
-          font.family: root.arabicFont
-          font.pixelSize: Math.round(button.fontSize * 1.35)
-          color: button.foreground
-        }
+        Row {
+          id: customRow
+          spacing: Style.space(7)
 
-        PlainText {
-          id: glossLabel
-          visible: root.labelStyle === "Root and meaning" && root.glossText !== ""
-          text: "· " + root.glossText
-          font.family: button.fontFamily
-          font.pixelSize: button.fontSize
-          renderType: Text.NativeRendering
-          color: button.foreground
-        }
+          PlainText {
+            id: iconLabel
+            visible: root.chip
+            anchors.baseline: glossLabel.baseline
+            text: root.icon
+            font.family: button.fontFamily
+            font.pixelSize: Math.round(button.fontSize * 0.85)
+            color: Qt.rgba(button.foreground.r, button.foreground.g, button.foreground.b, 0.6)
+          }
 
-        PlainText {
-          id: countLabel
-          anchors.baseline: glossLabel.baseline
-          visible: root.countText !== ""
-          text: "· " + root.countText
-          font.family: button.fontFamily
-          font.pixelSize: button.fontSize
-          renderType: Text.NativeRendering
-          color: button.foreground
+          PlainText {
+            id: rootLabel
+            anchors.baseline: glossLabel.baseline
+            text: !root.today ? "" : (root.arabicRoot ? root.today.root : Model.compactTranslit(root.today.translit))
+            font.family: root.arabicRoot ? root.arabicFont : button.fontFamily
+            // Naskh hangs deep below its baseline; much past 1.15x the bar
+            // font its tails and dots leave the capsule.
+            font.pixelSize: root.arabicRoot ? Math.round(button.fontSize * 1.15) : button.fontSize
+            font.weight: root.chip ? Font.DemiBold : Font.Normal
+            color: button.foreground
+          }
+
+          // A hairline rather than a dot, so the separator doesn't read as
+          // one more glyph among the clock's.
+          Rectangle {
+            visible: root.showsMeaning
+            anchors.verticalCenter: glossLabel.verticalCenter
+            width: 1
+            height: Math.round(button.fontSize * 0.9)
+            color: Qt.rgba(button.foreground.r, button.foreground.g, button.foreground.b, 0.35)
+          }
+
+          // The meaning text. Always present: the root, icon and badge sit on
+          // its baseline even when it is hidden in the "Root" style.
+          PlainText {
+            id: glossLabel
+            visible: root.showsMeaning
+            text: root.glossText
+            font.family: button.fontFamily
+            font.pixelSize: button.fontSize
+            renderType: Text.NativeRendering
+            color: button.foreground
+          }
+
+          Rectangle {
+            id: countBadge
+            visible: root.countText !== ""
+            anchors.verticalCenter: glossLabel.verticalCenter
+            width: countLabel.implicitWidth + Style.space(10)
+            height: Math.round(countLabel.implicitHeight * 0.95)
+            radius: Style.space(3)
+            color: Qt.rgba(button.foreground.r, button.foreground.g, button.foreground.b, root.chip ? 0.08 : 0)
+
+            PlainText {
+              id: countLabel
+              anchors.centerIn: parent
+              text: root.countText
+              font.family: button.fontFamily
+              font.pixelSize: Math.round(button.fontSize * 0.85)
+              renderType: Text.NativeRendering
+              color: Qt.rgba(button.foreground.r, button.foreground.g, button.foreground.b, 0.7)
+            }
+          }
         }
       }
     }

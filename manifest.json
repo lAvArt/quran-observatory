@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "io.github.lavart.quran-observatory",
   "name": "Quran Observatory",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "lAvArt Studio",
-  "description": "Today's Quranic root in the bar, from quranobservatory.org: its meaning, how often and where it occurs, example verses, and an offline root search.",
+  "description": "Today's Quranic root in the bar, from quranobservatory.org: its meaning and occurrences, example verses, companion roots, a concordance, its spread across the surahs, and an offline root search.",
   "kinds": [
     "bar-widget"
   ],
@@ -18,6 +18,7 @@
     "allowMultiple": false,
     "defaults": {
       "label": "Root and meaning",
+      "barStyle": "Chip",
       "showCount": "On",
       "updates": "Weekly",
       "arabicFont": "Noto Naskh Arabic"
@@ -35,6 +36,17 @@
         ],
         "defaultValue": "Root and meaning",
         "description": "What the bar shows for today's root. Vertical bars always show the icon."
+      },
+      {
+        "key": "barStyle",
+        "type": "enum",
+        "label": "Bar style",
+        "options": [
+          "Chip",
+          "Plain"
+        ],
+        "defaultValue": "Chip",
+        "description": "Chip sets the widget apart from the clock and indicators beside it with a faint, softly rounded frame. Plain is text only."
       },
       {
         "key": "showCount",
@@ -57,7 +69,7 @@
           "Off"
         ],
         "defaultValue": "Weekly",
-        "description": "Fetches the root index (about 1.7 MB) from quranobservatory.org and keeps it in ~/.cache. Today's root and search then work offline; what you type is never sent anywhere. Off makes no network requests, so with no saved copy the widget stays empty."
+        "description": "Fetches the root index and concordance (about 3.5 MB) from quranobservatory.org and keeps it in ~/.cache. Today's root and search then work offline; what you type is never sent anywhere. Off makes no network requests, so with no saved copy the widget stays empty."
       },
       {
         "key": "arabicFont",

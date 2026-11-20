@@ -167,6 +167,13 @@ test("barLabel appends the occurrence count when given one", () => {
   assert.strictEqual(M.barLabel(r, "Icon only", "339×"), "", "the icon stays alone")
 })
 
+test("shortMeaning keeps the first sense", () => {
+  assert.strictEqual(M.shortMeaning({ gloss: "to believe / trust", translit: "" }), "to believe")
+  assert.strictEqual(M.shortMeaning({ gloss: "to read / recite; the Quran", translit: "" }), "to read")
+  assert.strictEqual(M.shortMeaning({ gloss: "", translit: "b · q · y" }), "b · q · y")
+  assert.strictEqual(M.shortMeaning(null), "")
+})
+
 test("todayText is one plain line", () => {
   assert.strictEqual(M.todayText(index.roots["رحم"]), "ر-ح-م (r · ḥ · m) - mercy / compassion - 339 occurrences")
   assert.strictEqual(M.todayText(null), "")
@@ -206,6 +213,92 @@ test("needsDownload follows the schedule and backs off after a failure", () => {
   assert.strictEqual(M.needsDownload(0, now, "Weekly", now - 60000), false, "recent failure")
   assert.strictEqual(M.needsDownload(0, now, "Weekly", now - 2 * 3600 * 1000), true)
   assert.strictEqual(M.needsDownload(0, now, "bogus", 0), true, "unknown interval acts as weekly")
+})
+
+// ---- Concordance ----
+
+// 114 one-word sūrahs with no roots, then a few real āyahs at the front.
+// Roots: 0 رحم, 1 غفر, 2 كتب, 3 علم.
+function concordanceFixture() {
+  const surahs = []
+  for (let n = 1; n <= 114; n++) surahs.push({ n, ayahs: [[-1]] })
+  surahs[0].ayahs = [[0, 1, -1], [0, 1], [2, -1, 0]]      // sūrah 1 (Makkan)
+  surahs[1].ayahs = [[1, 0, 3], [3, 3, -1, -1], [2, 2]]  // sūrah 2 (Madinan)
+  return { version: 1, roots: [{ bare: "رحم" }, { bare: "غفر" }, { bare: "كتب" }, { bare: "علم" }], surahs }
+}
+const conc = M.sanitizeConcordance(concordanceFixture())
+const concText = M.sanitizeConcordanceText({ surahs: conc.surahs.map((s) => s.map((a) => a.map((_, i) => "w" + i))) }, conc)
+
+test("concordance validation", () => {
+  assert.ok(conc)
+  assert.strictEqual(conc.totalAyahs, 3 + 3 + 112)
+  assert.strictEqual(conc.totalWords, 3 + 2 + 3 + 3 + 4 + 2 + 112)
+  assert.strictEqual(M.sanitizeConcordance({ roots: [], surahs: [] }), null, "needs 114 sūrahs")
+  const bad = concordanceFixture()
+  bad.roots[2] = { bare: "<script>" }
+  bad.surahs[0].ayahs[0][2] = 99
+  const cleaned = M.sanitizeConcordance(bad)
+  assert.strictEqual(cleaned.roots[2], "", "bad root keeps its slot")
+  assert.strictEqual(cleaned.lookup["كتب"], undefined)
+  assert.deepStrictEqual(cleaned.surahs[0][0], [0, 1, -1], "out-of-range index is rootless")
+  assert.deepStrictEqual(cleaned.surahs[0][2], [-1, -1, 0], "words of a rejected root are rootless")
+})
+
+test("concordance text must line up word for word", () => {
+  assert.ok(concText)
+  const shifted = { surahs: concText.map((s) => s.map((a) => a.slice())) }
+  shifted.surahs[1][1].pop()
+  assert.strictEqual(M.sanitizeConcordanceText(shifted, conc), null)
+  assert.strictEqual(M.parseConcordanceText("[]", conc), null)
+})
+
+test("rootOccurrences lists āyahs and word positions in mushaf order", () => {
+  assert.deepStrictEqual(M.rootOccurrences(conc, "رحم"), [
+    { s: 1, a: 1, positions: [0] }, { s: 1, a: 2, positions: [0] }, { s: 1, a: 3, positions: [2] }, { s: 2, a: 1, positions: [1] }
+  ])
+  assert.deepStrictEqual(M.rootOccurrences(conc, "نور"), [])
+  assert.deepStrictEqual(M.rootOccurrences(null, "رحم"), [])
+})
+
+test("companions rank by shared āyahs and PMI, skipping thin pairs", () => {
+  const verses = { "رحم": 4, "غفر": 3, "كتب": 2, "علم": 2 }
+  const list = M.companions(conc, "رحم", (b) => verses[b], 8, 1)
+  assert.deepStrictEqual(list.map((c) => [c.bare, c.shared]), [["غفر", 3], ["كتب", 1], ["علم", 1]])
+  assert.ok(list[0].score > list[1].score)
+  assert.deepStrictEqual(M.companions(conc, "رحم", (b) => verses[b], 8, 3).map((c) => c.bare), ["غفر"], "minShared")
+  assert.deepStrictEqual(M.companions(conc, "رحم", (b) => verses[b], 1, 1).length, 1, "limit")
+  assert.deepStrictEqual(M.companions(conc, "رحم", () => 0, 8, 1), [], "unknown verse counts are dropped")
+})
+
+test("concordanceLines gives one line per occurrence with context", () => {
+  const lines = M.concordanceLines(conc, concText, "علم", 1)
+  assert.deepStrictEqual(lines.map((l) => [l.s, l.a, l.before, l.word, l.after]), [
+    [2, 1, "w1", "w2", ""], [2, 2, "", "w0", "w1"], [2, 2, "w0", "w1", "w2"]
+  ])
+  assert.strictEqual(lines[0].clippedBefore, true)
+  assert.strictEqual(lines[2].clippedAfter, true)
+  assert.deepStrictEqual(M.concordanceLines(conc, null, "علم", 1), [], "no text, no lines")
+  assert.strictEqual(M.concordanceLines(conc, concText, "علم", 1, 2).length, 2, "limit")
+})
+
+test("distribution counts, densities and the Makkan split", () => {
+  const d = M.distribution(conc, "رحم")
+  assert.deepStrictEqual(d.counts.slice(0, 3), [3, 1, 0])
+  assert.strictEqual(d.total, 4)
+  assert.strictEqual(d.makkan, 3)
+  assert.strictEqual(d.madinan, 1)
+  assert.strictEqual(d.makkanShare, 0.75)
+  assert.strictEqual(d.density[0], 3 * 1000 / 8)
+  assert.ok(d.makkanWordShare > 0 && d.makkanWordShare < 1)
+  assert.strictEqual(M.distribution(conc, "نور").makkanShare, 0)
+})
+
+test("revelation places", () => {
+  assert.strictEqual(M.REVELATION.length, 114)
+  assert.strictEqual(M.isMakkan(1), true)
+  assert.strictEqual(M.isMakkan(2), false)
+  assert.strictEqual(M.isMakkan(114), true)
+  assert.strictEqual(M.REVELATION.split("D").length - 1, 28)
 })
 
 test("moveSelection wraps", () => {

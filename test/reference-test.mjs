@@ -1,6 +1,6 @@
 // Checks the plugin's search and root of the day against the site's own code.
 //
-//   node test/reference-test.mjs <site-repo> <root-stats.json> [form-index.json]
+//   node test/reference-test.mjs <site-repo> <root-stats.json> [form-index.json] [concordance.json concordance-text.json]
 //
 // <site-repo> is a checkout of github.com/lAvArt/Quranic-Linguistics-Observatory;
 // the JSON files are the site's public data (curl them from
@@ -10,7 +10,7 @@ import os from "node:os"
 import path from "node:path"
 import { createRequire } from "node:module"
 
-const [siteRepo, statsPath, formsPath] = process.argv.slice(2)
+const [siteRepo, statsPath, formsPath, concPath, textPath] = process.argv.slice(2)
 if (!siteRepo || !statsPath) {
   console.error("usage: node test/reference-test.mjs <site-repo> <root-stats.json> [form-index.json]")
   process.exit(2)
@@ -27,6 +27,12 @@ const copy = (from, to, rewrite) => {
 copy("lib/search/arabicNormalize.ts", "arabicNormalize.ts")
 copy("lib/corpus/rootStatsClient.ts", "rootStatsClient.ts", true)
 copy("lib/corpus/formIndexClient.ts", "formIndexClient.ts", true)
+copy("lib/data/surahData.ts", "surahData.ts")
+{
+  const p = path.join(tmp, "concordanceClient.ts")
+  copy("lib/corpus/concordanceClient.ts", "concordanceClient.ts", true)
+  fs.writeFileSync(p, fs.readFileSync(p, "utf8").replace(/"@\/lib\/data\/surahData"/g, '"./surahData.ts"'))
+}
 
 const site = await import(path.join(tmp, "rootStatsClient.ts"))
 const siteForms = await import(path.join(tmp, "formIndexClient.ts"))
@@ -84,6 +90,34 @@ if (forms) {
   }
 }
 
+// The concordance: every root's totals must match the root index, and its
+// per-sūrah āyah counts and revelation places must match the site's own
+// selectConcordance.
+let concChecked = false
+if (concPath) {
+  const siteConc = await import(path.join(tmp, "concordanceClient.ts"))
+  const rawConc = JSON.parse(fs.readFileSync(concPath, "utf8"))
+  const conc = M.parseConcordance(fs.readFileSync(concPath, "utf8"))
+  check(conc !== null, "concordance validates")
+  if (textPath) check(M.parseConcordanceText(fs.readFileSync(textPath, "utf8"), conc) !== null, "concordance text lines up with the concordance")
+  for (let i = 0; conc && i < rawConc.roots.length; i++) {
+    const bare = rawConc.roots[i].bare
+    const stat = index.roots[bare]
+    const occ = M.rootOccurrences(conc, bare)
+    const count = occ.reduce((n, o) => n + o.positions.length, 0)
+    check(stat && count === stat.count && occ.length === stat.verses, `concordance totals for ${bare}`)
+    check(stat && JSON.stringify(M.distribution(conc, bare).counts) === JSON.stringify(stat.hist), `distribution for ${bare}`)
+    const sel = siteConc.selectConcordance(rawConc, [i], "ayah")
+    const perSurah = new Array(114).fill(0)
+    for (const o of occ) perSurah[o.s - 1]++
+    for (const s of sel.surahs) {
+      check(s.perRoot[0] === perSurah[s.n - 1], `āyahs of ${bare} in sūrah ${s.n}`)
+      check((s.revelationPlace === "makkah") === M.isMakkan(s.n), `revelation place of sūrah ${s.n}`)
+    }
+  }
+  concChecked = true
+}
+
 fs.rmSync(tmp, { recursive: true, force: true })
-console.log(failures ? `${failures} mismatches` : `reference: plugin matches the site (${queries.length} queries, 1000 days${forms ? ", forms" : ""})`)
+console.log(failures ? `${failures} mismatches` : `reference: plugin matches the site (${queries.length} queries, 1000 days${forms ? ", forms" : ""}${concChecked ? ", concordance" : ""})`)
 process.exitCode = failures ? 1 : 0
