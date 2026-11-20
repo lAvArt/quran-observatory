@@ -741,7 +741,7 @@ function companions(conc, bare, versesOf, limit, minShared) {
     if (!(fy > 0)) continue
     var pmi = Math.log(count * n / (fx * fy)) / Math.LN2
     if (pmi <= 0) continue
-    out.push({ bare: other, shared: count, score: count * pmi })
+    out.push({ bare: other, shared: count, pmi: pmi, score: count * pmi })
   }
   out.sort(function(x, y) { return y.score - x.score || y.shared - x.shared })
   return out.slice(0, max)
@@ -803,31 +803,139 @@ function distribution(conc, bare) {
   }
 }
 
-// Share of a root's occurrences in Makkan sūrahs, from its per-sūrah counts.
-function makkanShareFromHist(hist) {
-  var makkan = 0
-  var total = 0
-  for (var i = 0; i < hist.length && i < SURAH_COUNT; i++) {
-    total += hist[i]
-    if (isMakkan(i + 1)) makkan += hist[i]
-  }
-  return total > 0 ? makkan / total : 0
+// ---- Graphs drawn the way quranobservatory.org draws them ------------------
+
+// The site's "Where it occurs · by sūrah" strip (MinimalHome SurahStrip): a
+// bar per sūrah, 3 + v * (H - 12) tall; bars at or under 26% of the busiest
+// stay grey, the rest take the accent, solid above 60% and at 55% between.
+function surahStrip(hist) {
+  var max = Math.max(1, maxOf(hist))
+  return hist.map(function(count) {
+    var v = count / max
+    var faint = v <= 0.26
+    return { count: count, v: v, accent: count > 0 && !faint, opacity: v > 0.6 || faint ? 1 : 0.55 }
+  })
 }
 
-// Heights 0..1 for a bar-sized graph: the sūrahs summed into `bins` groups
-// in mushaf order (19 bins of six by default, the panel grid's columns),
-// square-rooted so one dominant group doesn't flatten the rest.
-function sparkLevels(hist, bins) {
-  var n = bins > 0 ? bins : 19
-  var size = Math.ceil(hist.length / n)
-  var sums = []
-  for (var b = 0; b < n; b++) {
-    var sum = 0
-    for (var i = b * size; i < (b + 1) * size && i < hist.length; i++) sum += hist[i]
-    sums.push(sum)
+// Deterministic randomness, so a root's graph looks the same every time.
+function hashString(s) {
+  var h = 2166136261
+  for (var i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
   }
-  var max = maxOf(sums)
-  return sums.map(function(v) { return max > 0 ? Math.sqrt(v / max) : 0 })
+  return h >>> 0
+}
+
+function mulberry32(seed) {
+  var a = seed >>> 0
+  return function() {
+    a = (a + 0x6D2B79F5) | 0
+    var t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+// The site's collocation burst (CollocationNetworkGraph), fitted to a panel:
+// companions fan out around the root, stronger ties (higher PMI)
+// nearer the centre and drawn larger, each trailing a few tendril dots - more
+// for more shared āyahs. The site settles overlaps with a force simulation;
+// here a few rounds of pairwise pushing do the same for a dozen-odd labels.
+function collocationLayout(list, seed, width, height) {
+  var out = { nodes: [], tendrils: [], stars: [] }
+  var n = list.length
+  var starRng = mulberry32(hashString("stars:" + seed))
+  for (var s = 0; s < 46; s++)
+    out.stars.push({ x: starRng() * width, y: starRng() * height, r: 0.3 + starRng() * 0.9 })
+  if (!n || width <= 0 || height <= 0) return out
+
+  var lo = Infinity, hi = -Infinity, maxShared = 1
+  for (var i = 0; i < n; i++) {
+    lo = Math.min(lo, list[i].pmi)
+    hi = Math.max(hi, list[i].pmi)
+    maxShared = Math.max(maxShared, list[i].shared)
+  }
+  if (lo === hi) { lo -= 1; hi += 1 }
+
+  var marginX = 34, marginY = 20
+  var cx = width / 2, cy = height / 2
+  var rx = width / 2 - marginX, ry = height / 2 - marginY
+  // The site deals companions into a few hashed sectors, which suits its
+  // full-page canvas; in a panel that bunches them on one side, so here they
+  // go evenly round the root (seeded start, a little jitter).
+  var start = -Math.PI / 2 + (mulberry32(hashString("start:" + seed))() - 0.5) * 0.6
+  for (var k = 0; k < n; k++) {
+    var c = list[k]
+    var rng = mulberry32(hashString(seed + ":" + c.bare + ":" + k))
+    var t = Math.max(0, Math.min(1, (c.pmi - lo) / (hi - lo)))
+    var angle = start + 2 * Math.PI * k / n + (rng() - 0.5) * 0.35
+    var dist = 0.36 + (1 - t) * 0.5 + rng() * 0.12
+    out.nodes.push({
+      bare: c.bare, shared: c.shared, pmi: c.pmi, t: t,
+      r: 4 + Math.sqrt(t) * 6,
+      angle: angle,
+      x: cx + Math.cos(angle) * rx * dist,
+      y: cy + Math.sin(angle) * ry * dist,
+      rng: rng
+    })
+  }
+
+  // Keep label boxes (a dot with its label under it, about 46 x 40) apart, clear of the root
+  // in the middle, and inside the frame.
+  var nodes = out.nodes
+  for (var round = 0; round < 80; round++) {
+    for (var a = 0; a < n; a++) {
+      for (var b = a + 1; b < n; b++) {
+        var dx = nodes[b].x - nodes[a].x, dy = nodes[b].y - nodes[a].y
+        var d = Math.sqrt((dx / 46) * (dx / 46) + (dy / 40) * (dy / 40))
+        if (d >= 1) continue
+        if (d < 1e-6) { dx = 1; dy = 0; d = 1e-6 }
+        var push = (1 - d) / 2
+        var ux = dx / (d * 46), uy = dy / (d * 40)
+        nodes[a].x -= ux * push * 46; nodes[a].y -= uy * push * 40
+        nodes[b].x += ux * push * 46; nodes[b].y += uy * push * 40
+      }
+      var ox = nodes[a].x - cx, oy = nodes[a].y - cy
+      var od = Math.sqrt((ox / 52) * (ox / 52) + (oy / 34) * (oy / 34))
+      if (od < 1) {
+        var f = od < 1e-6 ? 1 : 1 / od
+        nodes[a].x = cx + (od < 1e-6 ? 52 : ox * f)
+        nodes[a].y = cy + oy * f
+      }
+      nodes[a].x = Math.max(marginX, Math.min(width - marginX, nodes[a].x))
+      nodes[a].y = Math.max(marginY, Math.min(height - marginY - 12, nodes[a].y))
+    }
+  }
+
+  for (var m = 0; m < n; m++) {
+    var node = nodes[m]
+    var tr = node.rng
+    var count = Math.max(2, Math.min(7, Math.round(2 + 4 * node.shared / maxShared + node.t * 2)))
+    var away = Math.atan2(node.y - cy, node.x - cx)
+    for (var q = 0; q < count; q++) {
+      var ta = away + (tr() - 0.5) * 1.1
+      var td = 12 + tr() * 30
+      out.tendrils.push({
+        parent: m,
+        x: Math.max(4, Math.min(width - 4, node.x + Math.cos(ta) * td)),
+        y: Math.max(4, Math.min(height - 4, node.y + Math.sin(ta) * td * 0.8)),
+        r: 1 + tr() * 1.3 + node.t * 0.6
+      })
+    }
+    delete node.rng
+  }
+  return out
+}
+
+// The control point of the site's curved strands (buildCurvedPath): bowed
+// off the straight line by a share of its length, to a side fixed per pair.
+function curveControl(sx, sy, tx, ty, key, bendScale) {
+  var dx = tx - sx, dy = ty - sy
+  var dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1)
+  var direction = hashString(key) % 2 === 0 ? 1 : -1
+  var bend = Math.min(60, dist * bendScale) * direction
+  return { x: (sx + tx) / 2 + (-dy / dist) * bend, y: (sy + ty) / 2 + (dx / dist) * bend }
 }
 
 function maxOf(values) {
@@ -903,8 +1011,10 @@ if (typeof module !== "undefined") {
     concordanceLines: concordanceLines,
     distribution: distribution,
     maxOf: maxOf,
-    makkanShareFromHist: makkanShareFromHist,
-    sparkLevels: sparkLevels,
+    surahStrip: surahStrip,
+    hashString: hashString,
+    collocationLayout: collocationLayout,
+    curveControl: curveControl,
     needsDownload: needsDownload,
     moveSelection: moveSelection
   }

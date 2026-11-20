@@ -8,26 +8,28 @@ Today's Quranic root in your [Omarchy](https://omarchy.org) bar, from
 ```
 
 It sits in a faint, softly rounded frame so it doesn't blend into the
-clock and indicators beside it (or set *Bar style* to *Plain*), with a small
-graph at the end: the root's spread across the sūrahs in 19 groups of six,
-or its Makkan / Madinan split (*Bar graph*). Hover it for what the graph
-shows. Click it for
+clock and indicators beside it (or set *Bar style* to *Plain*). Click it for
 the root in full: its Arabic form, transliteration and meaning; occurrences,
-verses, sūrahs and word forms; the parts of speech it takes. Under those,
-one diagram at a time:
+verses, sūrahs and word forms; the parts of speech it takes.
+
+The graphs follow the ones on quranobservatory.org. **Where it occurs · by
+sūrah** is always there: the site's strip of 114 bars, the busier sūrahs in
+the accent, with the sūrahs it occurs in most as chips underneath; the sūrah
+of the verse on show is spotlighted. Under that, one view at a time:
 
 - **Verses**: example verses with the root's words highlighted
-- **Companions**: the eight roots it shares the most verses with, drawn as a
-  network around it; heavier spokes mean more verses in common. Ranked by
-  local mutual information (shared verses × PMI), so the commonest roots
-  don't crowd out the telling ones: ر-ح-م's companions are غ-ف-ر (forgive),
-  ت-و-ب (repent), ف-ض-ل (bounty). Click a companion to move to it.
+- **Companions**: the site's collocation burst. The root glows in the
+  middle; curved strands run to the sixteen roots it keeps company with,
+  nearer, larger and in the accent for a stronger tie (higher PMI), each
+  trailing tendril dots. They're chosen by local mutual information (shared
+  verses × PMI), so the commonest roots don't crowd out the telling ones:
+  ر-ح-م's companions include غ-ف-ر (forgive), ت-و-ب (repent), ف-ض-ل (bounty).
+  Click a companion to move to it.
 - **Concordance**: every occurrence in context, with the word centred
   between what comes before and after it, and its verse reference
-- **Distribution**: occurrences in each of the 114 sūrahs; a grid of the
-  sūrahs shaded by occurrences per 1,000 words, so long sūrahs don't win
-  by length; and the Makkan / Madinan split, marked against where an even
-  spread would fall
+- **Distribution**: a grid of the 114 sūrahs shaded by occurrences per
+  1,000 words, so long sūrahs don't win by length, and the Makkan /
+  Madinan split, marked against where an even spread would fall
 
 Search by Arabic root or word (`رحمة`, `يكتبون`, `أم القرى`), English meaning
 (`mercy`), Buckwalter (`rHm`) or transliteration (`r h m`).
@@ -87,7 +89,6 @@ run `omarchy-shell shell rescanPlugins` and
 |---|---|
 | Bar label | Root and meaning · Root · Transliteration and meaning · Icon only |
 | Bar style | Chip · Plain |
-| Bar graph | Surah distribution · Makkan / Madinan · Off |
 | Show occurrences | On · Off (the `196×` after the root) |
 | Download root data | Weekly · Daily · Off |
 | Arabic font | any installed font; default Noto Naskh Arabic |

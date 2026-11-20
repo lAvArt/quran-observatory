@@ -52,17 +52,6 @@ BarWidget {
     var lines = [strings.t("bar.tooltip").arg(today.root).arg(today.translit)]
     if (today.gloss) lines.push(today.gloss)
     lines.push(strings.tn("stat.occurrences", today.count).arg(Commons.I18n.formatNumber(today.count)))
-    // Spell out what the little graph shows.
-    if (barGraph === "Makkan / Madinan") {
-      var share = Math.round(Model.makkanShareFromHist(today.hist) * 100)
-      lines.push(strings.t("dist.makkan").arg(Commons.I18n.formatNumber(share)).arg(Commons.I18n.formatNumber(Math.round(today.count * share / 100))))
-    } else if (barGraph !== "Off" && today.top.length) {
-      var arabic = Model.siteLanguage(Commons.I18n.language) === "ar"
-      var tops = []
-      for (var i = 0; i < today.top.length && i < 3; i++)
-        tops.push(strings.t("hist.topEntry").arg(Model.surahName(today.top[i][0], arabic)).arg(Commons.I18n.formatNumber(today.top[i][1])))
-      lines.push(strings.t("hist.mostIn").arg(tops.join(", ")))
-    }
     return lines.join("\n")
   }
 
@@ -167,10 +156,6 @@ BarWidget {
     return today.gloss || Model.compactTranslit(today.translit)
   }
   readonly property bool hot: button.tooltipHovered || opened
-  // "Surah distribution", "Makkan / Madinan" or "Off".
-  readonly property string barGraph: String(setting("barGraph", "Surah distribution"))
-  // Where an even spread would split, once the concordance is in.
-  readonly property real makkanWordShare: concordance ? Model.distribution(concordance, "").makkanWordShare : 0
 
   WidgetButton {
     id: button
@@ -303,52 +288,6 @@ BarWidget {
               font.pixelSize: Math.round(button.fontSize * 0.85)
               renderType: Text.NativeRendering
               color: Qt.rgba(button.foreground.r, button.foreground.g, button.foreground.b, 0.7)
-            }
-          }
-
-          // A glance at the panel's diagrams: the spread across the 114
-          // sūrahs as a sparkline, or the Makkan / Madinan split with the
-          // even-spread mark. Monochrome, like the frame.
-          Item {
-            id: barGraph
-            visible: root.barGraph !== "Off" && !!root.today
-            width: root.barGraph === "Makkan / Madinan" ? Style.space(46) : Style.space(58)
-            height: Math.max(4, Math.round(capsule.height - 2 * Style.space(6)))
-            y: labelBox.middle - height / 2
-
-            Canvas {
-              id: graphCanvas
-              anchors.fill: parent
-              readonly property var deps: [root.today, root.barGraph, root.makkanWordShare, button.foreground, width, height]
-              onDepsChanged: requestPaint()
-              onPaint: {
-                var ctx = getContext("2d")
-                ctx.reset()
-                if (!root.today) return
-                var fg = button.foreground
-                var w = width, h = height
-                if (root.barGraph === "Makkan / Madinan") {
-                  var share = Model.makkanShareFromHist(root.today.hist)
-                  var top = Math.round(h * 0.25), bar = Math.max(3, Math.round(h * 0.5))
-                  ctx.fillStyle = Qt.rgba(fg.r, fg.g, fg.b, 0.18)
-                  ctx.fillRect(0, top, w, bar)
-                  ctx.fillStyle = Qt.rgba(fg.r, fg.g, fg.b, 0.65)
-                  ctx.fillRect(0, top, Math.round(w * share), bar)
-                  if (root.makkanWordShare > 0) {
-                    ctx.fillStyle = fg
-                    ctx.fillRect(Math.round(w * root.makkanWordShare) - 1, 0, 1.5, h)
-                  }
-                } else {
-                  var levels = Model.sparkLevels(root.today.hist, 19)
-                  var gap = 1
-                  var bw = (w - gap * (levels.length - 1)) / levels.length
-                  for (var i = 0; i < levels.length; i++) {
-                    var bh = levels[i] > 0 ? Math.max(1.5, levels[i] * h) : 1
-                    ctx.fillStyle = Qt.rgba(fg.r, fg.g, fg.b, levels[i] > 0 ? 0.35 + 0.45 * levels[i] : 0.12)
-                    ctx.fillRect(i * (bw + gap), h - bh, bw, bh)
-                  }
-                }
-              }
             }
           }
         }

@@ -293,18 +293,43 @@ test("distribution counts, densities and the Makkan split", () => {
   assert.strictEqual(M.distribution(conc, "نور").makkanShare, 0)
 })
 
-test("bar graph helpers", () => {
-  const hist = new Array(114).fill(0)
-  hist[0] = 3; hist[1] = 1  // Al-Fatihah is Makkan, Al-Baqarah Madinan
-  assert.strictEqual(M.makkanShareFromHist(hist), 0.75)
-  assert.strictEqual(M.makkanShareFromHist(new Array(114).fill(0)), 0)
-  assert.deepStrictEqual(M.sparkLevels([0, 1, 4], 3), [0, 0.5, 1])
-  const bins = M.sparkLevels(hist)
-  assert.strictEqual(bins.length, 19)
-  assert.strictEqual(bins[0], 1, "sūrahs 1-6 sum into the first bin")
-  assert.ok(bins.slice(1).every((v) => v === 0))
-  const d = M.distribution(conc, "رحم")
-  assert.strictEqual(M.makkanShareFromHist(d.counts), d.makkanShare, "agrees with the concordance")
+test("surahStrip follows the site's bar rules", () => {
+  const bars = M.surahStrip([0, 10, 7, 4, 2])
+  assert.deepStrictEqual(bars.map((b) => b.accent), [false, true, true, true, false])
+  assert.deepStrictEqual(bars.map((b) => b.opacity), [1, 1, 1, 0.55, 1])
+  assert.strictEqual(bars[1].v, 1)
+  assert.strictEqual(M.surahStrip([0, 0]).every((b) => !b.accent), true)
+})
+
+test("collocationLayout is deterministic, in bounds and puts strong ties nearer", () => {
+  const list = []
+  for (let i = 0; i < 16; i++) list.push({ bare: "ر" + String.fromCharCode(0x0628 + i) + "م", shared: 20 - i, pmi: 4 - i * 0.2 })
+  const a = M.collocationLayout(list, "رحم", 440, 300)
+  const b = M.collocationLayout(list, "رحم", 440, 300)
+  assert.deepStrictEqual(a, b)
+  assert.strictEqual(a.nodes.length, 16)
+  for (const nd of a.nodes) {
+    assert.ok(nd.x >= 34 && nd.x <= 440 - 34 && nd.y >= 20 && nd.y <= 300 - 20, "inside the frame")
+    assert.ok(nd.r >= 4 && nd.r <= 10)
+  }
+  for (const td of a.tendrils) assert.ok(td.x >= 0 && td.x <= 440 && td.y >= 0 && td.y <= 300)
+  assert.ok(a.tendrils.length >= 32 && a.stars.length > 0)
+  const far = (nd) => Math.hypot((nd.x - 220) / 220, (nd.y - 150) / 150)
+  const strong = a.nodes.slice(0, 5).reduce((s, nd) => s + far(nd), 0) / 5
+  const weak = a.nodes.slice(-5).reduce((s, nd) => s + far(nd), 0) / 5
+  assert.ok(strong < weak, "higher PMI sits nearer the root")
+  let close = 0
+  for (let i = 0; i < 16; i++) for (let j = i + 1; j < 16; j++)
+    if (Math.abs(a.nodes[i].x - a.nodes[j].x) < 30 && Math.abs(a.nodes[i].y - a.nodes[j].y) < 18) close++
+  assert.strictEqual(close, 0, "labels don't sit on each other")
+  assert.deepStrictEqual(M.collocationLayout([], "x", 100, 100).nodes, [])
+})
+
+test("curveControl bows to a fixed side", () => {
+  const c = M.curveControl(0, 0, 100, 0, "a:b", 0.22)
+  assert.strictEqual(c.x, 50)
+  assert.strictEqual(Math.abs(c.y), 22)
+  assert.deepStrictEqual(M.curveControl(0, 0, 100, 0, "a:b", 0.22), c)
 })
 
 test("revelation places", () => {

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0 (2026-11-20)
+
+- Graphs drawn the way quranobservatory.org draws them: the "Where it occurs
+  · by sūrah" strip, always shown, with its accent rule, axis, top-sūrah
+  chips and the current verse's sūrah spotlighted; and the collocation burst
+  in Companions (glowing root, curved strands, PMI-sized nodes, tendrils,
+  legend), now with sixteen companions.
+- The bar graph from 1.2.0 is gone: the bar shows the framed label only.
+- Fixed a binding loop when the concordance text first loads.
+
 ## 1.2.0 (2026-11-20)
 
 - A small graph in the bar after the label: the root's spread across the

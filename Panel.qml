@@ -54,7 +54,14 @@ Panel {
   readonly property var examples: shown ? shown.examples : []
   readonly property var example: examples.length ? examples[Math.min(exampleIndex, examples.length - 1)] : null
   readonly property var words: Model.verseWords(example, shown ? shown.bare : "")
-  readonly property var levels: shown ? Model.histogramLevels(shown.hist) : []
+  readonly property var stripBars: shown ? Model.surahStrip(shown.hist) : []
+  // The sūrah of the verse on show, spotlighted in the strip.
+  readonly property int activeSura: view === "verses" && example ? example.s : 0
+  readonly property int maxTop: {
+    var m = 0
+    if (shown) for (var i = 0; i < shown.top.length; i++) m = Math.max(m, shown.top[i][1])
+    return m
+  }
   property int hoveredSurah: 0
   property int hoveredCell: 0
 
@@ -68,7 +75,7 @@ Panel {
   }
 
   readonly property var companionList: view === "companions" && shown && conc
-    ? Model.companions(conc, shown.bare, versesOf, 8, 3) : []
+    ? Model.companions(conc, shown.bare, versesOf, 16, 3) : []
 
   readonly property var kwic: {
     if (view !== "concordance" || !shown || !conc || !hostWidget) return []
@@ -218,16 +225,6 @@ Panel {
       if (key) parts.push(strings.tn("pos." + key, shown.pos[i][1]).arg(n(shown.pos[i][1])))
     }
     return parts.join("  ·  ")
-  }
-
-  readonly property string histogramCaption: {
-    if (!shown) return ""
-    if (hoveredSurah > 0)
-      return strings.t("hist.hover").arg(surahLabel(hoveredSurah)).arg(n(hoveredSurah)).arg(n(shown.hist[hoveredSurah - 1]))
-    var tops = []
-    for (var i = 0; i < shown.top.length && i < 3; i++)
-      tops.push(strings.t("hist.topEntry").arg(surahLabel(shown.top[i][0])).arg(n(shown.top[i][1])))
-    return tops.length ? strings.t("hist.mostIn").arg(tops.join(", ")) : ""
   }
 
   readonly property string statusText: {
@@ -505,6 +502,200 @@ Panel {
             color: root.dim
           }
 
+          // ---- Where it occurs · by sūrah ----
+          // The site's strip, drawn by its rules (Model.surahStrip): a bar per
+          // sūrah, the busier ones in the accent, the sūrah of the verse on
+          // show spotlighted with a dot while the rest fade.
+          Column {
+            width: parent.width
+            spacing: Style.space(6)
+
+            Item {
+              width: parent.width
+              height: whereLabel.implicitHeight
+
+              PanelSectionHeader {
+                id: whereLabel
+                anchors.left: parent.left
+                text: strings.t("where.label").toUpperCase()
+                foreground: root.contentForeground
+                fontFamily: root.uiFont
+              }
+
+              PlainText {
+                anchors.right: parent.right
+                anchors.verticalCenter: whereLabel.verticalCenter
+                text: root.shown ? strings.t("where.of").arg(root.n(root.shown.surahs)).arg(root.n(114)) : ""
+                font.family: root.uiFont
+                font.pixelSize: Style.font.caption
+                color: root.dim
+              }
+            }
+
+            Item {
+              id: strip
+              width: parent.width
+              height: Style.space(74)
+              // Sūrah 1 on the left whatever the language, as on the site.
+              LayoutMirroring.enabled: false
+
+              Canvas {
+                anchors.fill: parent
+                readonly property var deps: [root.stripBars, root.activeSura, root.hoveredSurah, root.contentForeground, root.accent, width, height]
+                onDepsChanged: requestPaint()
+                onPaint: {
+                  var ctx = getContext("2d")
+                  ctx.reset()
+                  var bars = root.stripBars
+                  var fg = root.contentForeground
+                  var ac = root.accent
+                  var W = width, H = height, gap = W / 114
+                  ctx.fillStyle = Qt.rgba(fg.r, fg.g, fg.b, 0.12)
+                  ctx.fillRect(0, H - 1, W, 1)
+                  for (var i = 0; i < bars.length; i++) {
+                    var b = bars[i]
+                    if (!b.count) continue
+                    var bh = 3 + b.v * (H - 12)
+                    var active = i + 1 === root.activeSura
+                    var hover = i + 1 === root.hoveredSurah
+                    var wide = Math.max(1.4, gap * (active ? 0.72 : 0.6))
+                    var alpha = active || hover ? 1 : b.opacity
+                    if (root.activeSura > 0 && !active && !hover) alpha = Math.min(alpha, 0.32)
+                    ctx.globalAlpha = alpha
+                    ctx.fillStyle = active || hover || b.accent ? ac : Qt.rgba(fg.r, fg.g, fg.b, 0.18)
+                    ctx.fillRect(i * gap + (gap - wide) / 2, H - bh, wide, bh)
+                  }
+                  ctx.globalAlpha = 1
+                  var s = root.activeSura
+                  if (s > 0 && bars[s - 1] && bars[s - 1].count) {
+                    var top = H - (3 + bars[s - 1].v * (H - 12)) - 6
+                    ctx.beginPath()
+                    ctx.arc((s - 0.5) * gap, top, 3, 0, 2 * Math.PI)
+                    ctx.fillStyle = ac
+                    ctx.fill()
+                    ctx.lineWidth = 1
+                    ctx.strokeStyle = Color.popups.background
+                    ctx.stroke()
+                  }
+                }
+              }
+
+              // Full-height targets, so thin bars are easy to catch.
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                onPositionChanged: function(mouse) {
+                  var s = Math.floor(mouse.x / (width / 114)) + 1
+                  root.hoveredSurah = s >= 1 && s <= 114 && root.shown && root.shown.hist[s - 1] > 0 ? s : 0
+                }
+                onExited: root.hoveredSurah = 0
+              }
+            }
+
+            // Ticks, 1 to 114 left to right in every language; the hover
+            // read-out takes their place while a bar is pointed at.
+            Item {
+              width: parent.width
+              height: Math.round(Style.font.caption * 1.5)
+              LayoutMirroring.enabled: false
+              LayoutMirroring.childrenInherit: true
+
+              Repeater {
+                model: root.hoveredSurah > 0 ? [] : [1, 30, 60, 90, 114]
+
+                PlainText {
+                  required property int modelData
+                  x: Math.max(0, Math.min(parent.width - implicitWidth, (modelData - 0.5) / 114 * parent.width - implicitWidth / 2))
+                  text: root.n(modelData)
+                  font.family: root.uiFont
+                  font.pixelSize: Style.font.caption
+                  color: root.faint
+                }
+              }
+
+              PlainText {
+                width: parent.width
+                visible: root.hoveredSurah > 0
+                horizontalAlignment: Text.AlignHCenter
+                text: root.hoveredSurah > 0 && root.shown
+                  ? strings.t("hist.hover").arg(root.surahLabel(root.hoveredSurah)).arg(root.n(root.hoveredSurah)).arg(root.n(root.shown.hist[root.hoveredSurah - 1]))
+                  : ""
+                font.family: root.uiFont
+                font.pixelSize: Style.font.caption
+                color: root.contentForeground
+              }
+            }
+
+            // The sūrahs it occurs in most, as on the site: name, a bar
+            // against the top one, and the count - or the verse, when once.
+            Flow {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Repeater {
+                model: root.shown ? root.shown.top : []
+
+                Rectangle {
+                  id: chip
+                  required property var modelData
+                  readonly property bool once: modelData[1] === 1 && modelData[2] > 0
+                  readonly property bool lit: modelData[0] === root.activeSura || modelData[0] === root.hoveredSurah
+                  width: chipRow.implicitWidth + 2 * Style.space(8)
+                  height: Math.round(chipRow.implicitHeight + Style.space(8))
+                  radius: Style.space(4)
+                  color: "transparent"
+                  border.width: 1
+                  border.color: lit ? root.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.14)
+
+                  Row {
+                    id: chipRow
+                    anchors.centerIn: parent
+                    spacing: Style.space(6)
+
+                    PlainText {
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: root.surahLabel(chip.modelData[0])
+                      font.family: root.uiFont
+                      font.pixelSize: Style.font.bodySmall
+                      color: root.contentForeground
+                    }
+
+                    Rectangle {
+                      visible: !chip.once
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: Style.space(26)
+                      height: 3
+                      radius: 1.5
+                      color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.12)
+
+                      Rectangle {
+                        width: root.maxTop > 0 ? parent.width * chip.modelData[1] / root.maxTop : 0
+                        height: parent.height
+                        radius: parent.radius
+                        color: root.accent
+                      }
+                    }
+
+                    PlainText {
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: chip.once ? root.n(chip.modelData[0]) + ":" + root.n(chip.modelData[2]) : strings.t("result.count").arg(root.n(chip.modelData[1]))
+                      font.family: root.uiFont
+                      font.pixelSize: Style.font.caption
+                      color: chip.once ? root.dim : root.accent
+                    }
+                  }
+
+                  MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: root.hoveredSurah = chip.modelData[0]
+                    onExited: if (root.hoveredSurah === chip.modelData[0]) root.hoveredSurah = 0
+                  }
+                }
+              }
+            }
+          }
+
           // ---- Views: one diagram at a time under the root's numbers ----
           ButtonGroup {
             anchors.horizontalCenter: parent.horizontalCenter
@@ -638,129 +829,209 @@ Panel {
             spacing: Style.space(8)
             visible: root.view === "companions" && !!root.conc
 
+            // The site's collocation burst: the root glowing in the middle,
+            // curved strands out to its companions - nearer, larger and in the
+            // accent for a stronger tie (higher PMI) - each trailing tendril
+            // dots, over a faint field of stars. Click a companion to go to it.
             Item {
-              id: network
+              id: burst
               width: parent.width
-              height: Style.space(250)
+              height: Style.space(300)
               visible: root.companionList.length > 0
+              LayoutMirroring.enabled: false
 
               property int hovered: -1
+              readonly property var layout: Model.collocationLayout(root.companionList, root.shown ? root.shown.bare : "", width, height)
               readonly property real cx: width / 2
               readonly property real cy: height / 2
-              // Node centres keep clear of the edges by half a node.
-              readonly property real rx: Math.max(0, width / 2 - Style.space(64))
-              readonly property real ry: Math.max(0, height / 2 - Style.space(26))
-              readonly property int maxShared: {
-                var m = 0
-                for (var i = 0; i < root.companionList.length; i++) m = Math.max(m, root.companionList[i].shared)
-                return m
-              }
-              function angle(i) { return -Math.PI / 2 + 2 * Math.PI * i / Math.max(1, root.companionList.length) }
-              function px(i) { return cx + rx * Math.cos(angle(i)) }
-              function py(i) { return cy + ry * Math.sin(angle(i)) }
 
-              onHoveredChanged: edges.requestPaint()
+              onHoveredChanged: burstCanvas.requestPaint()
 
               Connections {
                 target: root
-                function onCompanionListChanged() { network.hovered = -1 }
+                function onCompanionListChanged() { burst.hovered = -1 }
               }
 
-              // Spokes, heavier for more shared āyahs.
               Canvas {
-                id: edges
+                id: burstCanvas
                 anchors.fill: parent
-                readonly property var deps: [root.companionList, network.width, network.height, root.contentForeground, root.accent]
+                readonly property var deps: [burst.layout, root.contentForeground, root.accent]
                 onDepsChanged: requestPaint()
+
+                // Stronger ties take the accent, weaker the foreground; both
+                // brighten with strength, as the site's palette does.
+                function tone(node, alpha) {
+                  var c = node.t >= 0.5 ? root.accent : root.contentForeground
+                  return Qt.rgba(c.r, c.g, c.b, Math.min(1, alpha * (0.6 + 0.4 * node.t)))
+                }
+
+                function strand(ctx, sx, sy, tx, ty, key, bend) {
+                  var c = Model.curveControl(sx, sy, tx, ty, key, bend)
+                  ctx.beginPath()
+                  ctx.moveTo(sx, sy)
+                  ctx.quadraticCurveTo(c.x, c.y, tx, ty)
+                  ctx.stroke()
+                }
+
                 onPaint: {
                   var ctx = getContext("2d")
                   ctx.reset()
-                  var list = root.companionList
+                  var L = burst.layout
                   var fg = root.contentForeground
-                  for (var i = 0; i < list.length; i++) {
-                    var t = network.maxShared > 0 ? list[i].shared / network.maxShared : 0
-                    ctx.strokeStyle = i === network.hovered ? root.accent : Qt.rgba(fg.r, fg.g, fg.b, 0.14 + 0.4 * t)
-                    ctx.lineWidth = 1 + 4 * t
+                  var ac = root.accent
+                  var cx = burst.cx, cy = burst.cy
+                  var key = root.shown ? root.shown.bare : ""
+                  var i, nd, td, hot
+
+                  ctx.fillStyle = Qt.rgba(fg.r, fg.g, fg.b, 0.2)
+                  for (i = 0; i < L.stars.length; i++) {
                     ctx.beginPath()
-                    ctx.moveTo(network.cx, network.cy)
-                    ctx.lineTo(network.px(i), network.py(i))
-                    ctx.stroke()
+                    ctx.arc(L.stars[i].x, L.stars[i].y, L.stars[i].r, 0, 2 * Math.PI)
+                    ctx.fill()
                   }
+
+                  var glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 80)
+                  glow.addColorStop(0, Qt.rgba(ac.r, ac.g, ac.b, 0.18))
+                  glow.addColorStop(1, Qt.rgba(ac.r, ac.g, ac.b, 0))
+                  ctx.fillStyle = glow
+                  ctx.fillRect(cx - 80, cy - 80, 160, 160)
+
+                  // Branch strands to the tendrils.
+                  ctx.lineWidth = 0.7
+                  for (i = 0; i < L.tendrils.length; i++) {
+                    td = L.tendrils[i]
+                    nd = L.nodes[td.parent]
+                    ctx.strokeStyle = tone(nd, td.parent === burst.hovered ? 0.7 : 0.26)
+                    strand(ctx, nd.x, nd.y, td.x, td.y, nd.bare + ":" + i, 0.35)
+                  }
+
+                  // Trunks: a soft outer stroke and a finer core, like the site.
+                  for (i = 0; i < L.nodes.length; i++) {
+                    nd = L.nodes[i]
+                    hot = i === burst.hovered
+                    ctx.strokeStyle = tone(nd, hot ? 0.4 : 0.06 + nd.t * 0.14)
+                    ctx.lineWidth = Math.min(4, 1.6 + nd.shared * 0.06)
+                    strand(ctx, cx, cy, nd.x, nd.y, key + ":" + nd.bare, 0.22)
+                    ctx.strokeStyle = tone(nd, hot ? 1 : 0.24 + nd.t * 0.3)
+                    ctx.lineWidth = hot ? 1.6 : Math.min(1.8, 0.6 + nd.shared * 0.03)
+                    strand(ctx, cx, cy, nd.x, nd.y, key + ":" + nd.bare, 0.22)
+                  }
+
+                  for (i = 0; i < L.tendrils.length; i++) {
+                    td = L.tendrils[i]
+                    ctx.fillStyle = tone(L.nodes[td.parent], 0.8)
+                    ctx.beginPath()
+                    ctx.arc(td.x, td.y, td.r, 0, 2 * Math.PI)
+                    ctx.fill()
+                  }
+
+                  for (i = 0; i < L.nodes.length; i++) {
+                    nd = L.nodes[i]
+                    hot = i === burst.hovered
+                    ctx.fillStyle = tone(nd, hot ? 0.34 : 0.14)
+                    ctx.beginPath()
+                    ctx.arc(nd.x, nd.y, nd.r + (hot ? 5 : 3), 0, 2 * Math.PI)
+                    ctx.fill()
+                    ctx.fillStyle = tone(nd, 1)
+                    ctx.beginPath()
+                    ctx.arc(nd.x, nd.y, nd.r, 0, 2 * Math.PI)
+                    ctx.fill()
+                  }
+
+                  // The root: a light core in an accent ring, with a halo.
+                  ctx.fillStyle = Qt.rgba(ac.r, ac.g, ac.b, 0.22)
+                  ctx.beginPath()
+                  ctx.arc(cx, cy, 15, 0, 2 * Math.PI)
+                  ctx.fill()
+                  ctx.fillStyle = fg
+                  ctx.beginPath()
+                  ctx.arc(cx, cy, 8, 0, 2 * Math.PI)
+                  ctx.fill()
+                  ctx.strokeStyle = ac
+                  ctx.lineWidth = 2
+                  ctx.beginPath()
+                  ctx.arc(cx, cy, 9.5, 0, 2 * Math.PI)
+                  ctx.stroke()
                 }
               }
 
-              Rectangle {
-                width: centreLabel.implicitWidth + Style.space(22)
-                height: centreLabel.implicitHeight + Style.space(6)
-                x: network.cx - width / 2
-                y: network.cy - height / 2
-                radius: Style.space(6)
-                color: Color.popups.background
-                border.width: 1
-                border.color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.45)
-
-                PlainText {
-                  id: centreLabel
-                  anchors.centerIn: parent
-                  text: root.shown ? root.shown.root : ""
-                  font.family: root.arabicFont
-                  font.pixelSize: Math.round(Style.font.title * 1.5)
-                  font.weight: Font.DemiBold
-                  color: root.contentForeground
-                }
+              PlainText {
+                x: burst.cx - implicitWidth / 2
+                y: burst.cy + 15
+                text: root.shown ? root.shown.bare : ""
+                font.family: root.arabicFont
+                font.pixelSize: Math.round(Style.font.title * 1.35)
+                font.weight: Font.DemiBold
+                color: root.contentForeground
+                style: Text.Outline
+                styleColor: Color.popups.background
               }
 
               Repeater {
-                model: root.companionList
+                model: burst.layout.nodes
 
-                Rectangle {
-                  id: node
+                PlainText {
                   required property var modelData
                   required property int index
-                  readonly property var info: root.index ? root.index.roots[modelData.bare] : null
-                  readonly property bool hot: network.hovered === index
-                  width: Math.max(nodeRoot.implicitWidth, nodeGloss.width) + Style.space(14)
-                  height: nodeColumn.implicitHeight + Style.space(6)
-                  x: network.px(index) - width / 2
-                  y: network.py(index) - height / 2
-                  radius: Style.space(5)
-                  color: Color.popups.background
-                  border.width: 1
-                  border.color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, hot ? 0.5 : 0.16)
+                  x: modelData.x - implicitWidth / 2
+                  y: modelData.y + modelData.r + 1
+                  text: modelData.bare
+                  font.family: root.arabicFont
+                  font.pixelSize: Math.round(Style.font.title * 1.05)
+                  color: index === burst.hovered ? root.accent : root.contentForeground
+                  style: Text.Outline
+                  styleColor: Color.popups.background
+                }
+              }
 
-                  Column {
-                    id: nodeColumn
-                    anchors.centerIn: parent
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: burst.hovered >= 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
+                onPositionChanged: function(mouse) {
+                  var nodes = burst.layout.nodes
+                  var best = -1, bestDistance = 1e9
+                  for (var i = 0; i < nodes.length; i++) {
+                    // The dot and the label under it both count.
+                    var d = Math.sqrt(Math.pow(mouse.x - nodes[i].x, 2) + Math.pow(mouse.y - nodes[i].y - 8, 2))
+                    if (d < Math.max(18, nodes[i].r + 12) && d < bestDistance) { best = i; bestDistance = d }
+                  }
+                  burst.hovered = best
+                }
+                onExited: burst.hovered = -1
+                onClicked: if (burst.hovered >= 0) root.pick({ bare: burst.layout.nodes[burst.hovered].bare })
+              }
+            }
 
-                    PlainText {
-                      id: nodeRoot
-                      anchors.horizontalCenter: parent.horizontalCenter
-                      text: node.info ? node.info.root : node.modelData.bare
-                      font.family: root.arabicFont
-                      font.pixelSize: Math.round(Style.font.title * 1.15)
-                      color: node.hot ? root.accent : root.contentForeground
-                    }
+            // The site's legend: higher and lower PMI.
+            Row {
+              anchors.horizontalCenter: parent.horizontalCenter
+              spacing: Style.space(14)
+              visible: root.companionList.length > 0
 
-                    PlainText {
-                      id: nodeGloss
-                      anchors.horizontalCenter: parent.horizontalCenter
-                      width: Math.min(implicitWidth, Style.space(96))
-                      horizontalAlignment: Text.AlignHCenter
-                      elide: Text.ElideRight
-                      text: node.info ? Model.shortMeaning(node.info) : ""
-                      font.family: root.uiFont
-                      font.pixelSize: Style.font.caption
-                      color: root.dim
-                    }
+              Repeater {
+                model: [
+                  { tone: root.accent, label: strings.t("companions.legendHigh") },
+                  { tone: root.contentForeground, label: strings.t("companions.legendLow") }
+                ]
+
+                Row {
+                  required property var modelData
+                  spacing: Style.space(5)
+
+                  Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Style.space(7)
+                    height: width
+                    radius: width / 2
+                    color: modelData.tone
                   }
 
-                  MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onEntered: network.hovered = node.index
-                    onExited: if (network.hovered === node.index) network.hovered = -1
-                    onClicked: root.pick({ bare: node.modelData.bare })
+                  PlainText {
+                    text: modelData.label
+                    font.family: root.uiFont
+                    font.pixelSize: Style.font.caption
+                    color: root.dim
                   }
                 }
               }
@@ -770,7 +1041,7 @@ Panel {
               width: parent.width
               horizontalAlignment: Text.AlignHCenter
               wrapMode: Text.Wrap
-              readonly property var hoveredCompanion: network.hovered >= 0 ? root.companionList[network.hovered] : null
+              readonly property var hoveredCompanion: burst.hovered >= 0 ? root.companionList[burst.hovered] : null
               text: {
                 if (root.companionList.length === 0) return strings.t("companions.none")
                 var c = hoveredCompanion
@@ -903,72 +1174,6 @@ Panel {
             width: parent.width
             spacing: Style.space(14)
             visible: root.view === "distribution"
-
-            // Occurrences per sūrah, 1 to 114 in reading order.
-            Column {
-              width: parent.width
-              spacing: Style.space(6)
-
-              PanelSectionHeader {
-                text: strings.t("dist.perSurah").toUpperCase()
-                foreground: root.contentForeground
-                fontFamily: root.uiFont
-              }
-
-              Item {
-                width: parent.width
-                height: Style.space(40)
-
-                Row {
-                  id: histRow
-                  anchors.fill: parent
-                  spacing: 1
-                  readonly property real slot: (width - 113) / 114
-
-                  Repeater {
-                    model: root.levels
-
-                    Item {
-                      required property real modelData
-                      required property int index
-                      readonly property int surah: index + 1
-                      width: histRow.slot
-                      height: histRow.height
-
-                      Rectangle {
-                        anchors.bottom: parent.bottom
-                        width: parent.width
-                        height: modelData > 0 ? Math.max(2, Math.round(parent.height * modelData)) : 1
-                        radius: Math.min(1.5, width / 2)
-                        color: root.hoveredSurah === parent.surah ? root.accent
-                          : (modelData > 0 ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.35 + 0.45 * modelData)
-                            : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08))
-                      }
-                    }
-                  }
-                }
-
-                MouseArea {
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  onPositionChanged: function(mouse) {
-                    var bar = histRow.childAt(mouse.x, histRow.height / 2)
-                    root.hoveredSurah = bar && bar.surah ? bar.surah : 0
-                  }
-                  onExited: root.hoveredSurah = 0
-                }
-              }
-
-              PlainText {
-                width: parent.width
-                horizontalAlignment: Text.AlignHCenter
-                elide: Text.ElideRight
-                text: root.histogramCaption
-                font.family: root.uiFont
-                font.pixelSize: Style.font.caption
-                color: root.hoveredSurah > 0 ? root.contentForeground : root.dim
-              }
-            }
 
             // Per thousand words: the 114 sūrahs as a grid, darker where the
             // root is used more for the sūrah's length.

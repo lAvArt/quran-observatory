@@ -37,21 +37,22 @@ Item {
 
   // The concordance text is 1.4 MB of words; it is parsed the first time the
   // panel asks for it and dropped whenever its file or the concordance changes.
-  property var textCache: null
-  property bool textTried: false
+  // Kept in a plain object, not properties: filling it from inside a binding
+  // must not notify that binding (it would loop). textRevision is the signal.
+  property var textStore: ({ tried: false, data: null })
   property int textRevision: 0
 
   function concordanceText() {
-    if (!textTried && concordance) {
-      textTried = true
-      textCache = Model.parseConcordanceText(textView.text(), concordance)
+    var store = textStore
+    if (!store.tried && concordance) {
+      store.tried = true
+      store.data = Model.parseConcordanceText(textView.text(), concordance)
     }
-    return textCache
+    return store.data
   }
 
   function resetText() {
-    textCache = null
-    textTried = false
+    textStore = { tried: false, data: null }
     textRevision++
   }
 

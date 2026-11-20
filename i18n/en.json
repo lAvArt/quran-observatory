@@ -85,7 +85,7 @@
   "view.concordance": "Concordance",
   "view.distribution": "Distribution",
   "view.unavailable": "The concordance data hasn't downloaded yet.",
-  "companions.caption": "The roots it shares the most verses with · heavier lines, more verses in common",
+  "companions.caption": "The roots it keeps company with · nearer and larger means a stronger tie · click one to go to it",
   "companions.hover": {
     "one": "%1 and %2 share %3 verse",
     "other": "%1 and %2 share %3 verses"
@@ -102,5 +102,9 @@
   "dist.split": "Makkan and Madinan",
   "dist.makkan": "Makkan %1% · %2",
   "dist.madinan": "Madinan %1% · %2",
-  "dist.wordShare": "The mark shows where an even spread would split: Makkan surahs hold %1% of the Quran's words."
+  "dist.wordShare": "The mark shows where an even spread would split: Makkan surahs hold %1% of the Quran's words.",
+  "where.label": "Where it occurs · by surah",
+  "where.of": "%1 of %2",
+  "companions.legendHigh": "Higher PMI",
+  "companions.legendLow": "Lower PMI"
 }
