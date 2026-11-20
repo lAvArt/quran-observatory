@@ -3,9 +3,9 @@
 Today's Quranic root in your [Omarchy](https://omarchy.org) bar, from
 [quranobservatory.org](https://www.quranobservatory.org).
 
-```
-خ-ي-ر · good / better · 196×
-```
+![The widget in the bar: the root, its meaning and how often it occurs](docs/images/bar.png)
+
+![The panel: the collocation burst, the concordance rings aligned at first meeting, and the Quran structure map](preview.png)
 
 It sits in a faint, softly rounded frame so it doesn't blend into the
 clock and indicators beside it (or set *Bar style* to *Plain*). Click it for
@@ -42,6 +42,10 @@ of the verse on show is spotlighted. Under that, one view at a time:
   length and a stack of dots outward, one per verse holding the root; hover
   a sūrah for its name and counts. Under it, the Makkan / Madinan split,
   marked against where an even spread would fall.
+
+| Verses | Rings | Concordance | Structure |
+| --- | --- | --- | --- |
+| ![Verses](docs/images/verses.png) | ![Rings](docs/images/rings.png) | ![Concordance](docs/images/concordance.png) | ![Structure](docs/images/structure.png) |
 
 Search by Arabic root or word (`رحمة`, `يكتبون`, `أم القرى`), English meaning
 (`mercy`), Buckwalter (`rHm`) or transliteration (`r h m`).
