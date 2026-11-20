@@ -293,6 +293,20 @@ test("distribution counts, densities and the Makkan split", () => {
   assert.strictEqual(M.distribution(conc, "نور").makkanShare, 0)
 })
 
+test("bar graph helpers", () => {
+  const hist = new Array(114).fill(0)
+  hist[0] = 3; hist[1] = 1  // Al-Fatihah is Makkan, Al-Baqarah Madinan
+  assert.strictEqual(M.makkanShareFromHist(hist), 0.75)
+  assert.strictEqual(M.makkanShareFromHist(new Array(114).fill(0)), 0)
+  assert.deepStrictEqual(M.sparkLevels([0, 1, 4], 3), [0, 0.5, 1])
+  const bins = M.sparkLevels(hist)
+  assert.strictEqual(bins.length, 19)
+  assert.strictEqual(bins[0], 1, "sūrahs 1-6 sum into the first bin")
+  assert.ok(bins.slice(1).every((v) => v === 0))
+  const d = M.distribution(conc, "رحم")
+  assert.strictEqual(M.makkanShareFromHist(d.counts), d.makkanShare, "agrees with the concordance")
+})
+
 test("revelation places", () => {
   assert.strictEqual(M.REVELATION.length, 114)
   assert.strictEqual(M.isMakkan(1), true)

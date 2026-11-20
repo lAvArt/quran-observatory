@@ -8,7 +8,10 @@ Today's Quranic root in your [Omarchy](https://omarchy.org) bar, from
 ```
 
 It sits in a faint, softly rounded frame so it doesn't blend into the
-clock and indicators beside it (or set *Bar style* to *Plain*). Click it for
+clock and indicators beside it (or set *Bar style* to *Plain*), with a small
+graph at the end: the root's spread across the sūrahs in 19 groups of six,
+or its Makkan / Madinan split (*Bar graph*). Hover it for what the graph
+shows. Click it for
 the root in full: its Arabic form, transliteration and meaning; occurrences,
 verses, sūrahs and word forms; the parts of speech it takes. Under those,
 one diagram at a time:
@@ -84,6 +87,7 @@ run `omarchy-shell shell rescanPlugins` and
 |---|---|
 | Bar label | Root and meaning · Root · Transliteration and meaning · Icon only |
 | Bar style | Chip · Plain |
+| Bar graph | Surah distribution · Makkan / Madinan · Off |
 | Show occurrences | On · Off (the `196×` after the root) |
 | Download root data | Weekly · Daily · Off |
 | Arabic font | any installed font; default Noto Naskh Arabic |

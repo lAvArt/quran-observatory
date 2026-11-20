@@ -803,6 +803,33 @@ function distribution(conc, bare) {
   }
 }
 
+// Share of a root's occurrences in Makkan sūrahs, from its per-sūrah counts.
+function makkanShareFromHist(hist) {
+  var makkan = 0
+  var total = 0
+  for (var i = 0; i < hist.length && i < SURAH_COUNT; i++) {
+    total += hist[i]
+    if (isMakkan(i + 1)) makkan += hist[i]
+  }
+  return total > 0 ? makkan / total : 0
+}
+
+// Heights 0..1 for a bar-sized graph: the sūrahs summed into `bins` groups
+// in mushaf order (19 bins of six by default, the panel grid's columns),
+// square-rooted so one dominant group doesn't flatten the rest.
+function sparkLevels(hist, bins) {
+  var n = bins > 0 ? bins : 19
+  var size = Math.ceil(hist.length / n)
+  var sums = []
+  for (var b = 0; b < n; b++) {
+    var sum = 0
+    for (var i = b * size; i < (b + 1) * size && i < hist.length; i++) sum += hist[i]
+    sums.push(sum)
+  }
+  var max = maxOf(sums)
+  return sums.map(function(v) { return max > 0 ? Math.sqrt(v / max) : 0 })
+}
+
 function maxOf(values) {
   var m = 0
   for (var i = 0; i < values.length; i++) if (values[i] > m) m = values[i]
@@ -876,6 +903,8 @@ if (typeof module !== "undefined") {
     concordanceLines: concordanceLines,
     distribution: distribution,
     maxOf: maxOf,
+    makkanShareFromHist: makkanShareFromHist,
+    sparkLevels: sparkLevels,
     needsDownload: needsDownload,
     moveSelection: moveSelection
   }

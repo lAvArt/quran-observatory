@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.lavart.quran-observatory",
   "name": "Quran Observatory",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "lAvArt Studio",
   "description": "Today's Quranic root in the bar, from quranobservatory.org: its meaning and occurrences, example verses, companion roots, a concordance, its spread across the surahs, and an offline root search.",
   "kinds": [
@@ -19,6 +19,7 @@
     "defaults": {
       "label": "Root and meaning",
       "barStyle": "Chip",
+      "barGraph": "Surah distribution",
       "showCount": "On",
       "updates": "Weekly",
       "arabicFont": "Noto Naskh Arabic"
@@ -47,6 +48,18 @@
         ],
         "defaultValue": "Chip",
         "description": "Chip sets the widget apart from the clock and indicators beside it with a faint, softly rounded frame. Plain is text only."
+      },
+      {
+        "key": "barGraph",
+        "type": "enum",
+        "label": "Bar graph",
+        "options": [
+          "Surah distribution",
+          "Makkan / Madinan",
+          "Off"
+        ],
+        "defaultValue": "Surah distribution",
+        "description": "A small graph after the label: how today's root spreads across the 114 surahs, or its Makkan / Madinan split with a mark where an even spread would fall."
       },
       {
         "key": "showCount",

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0 (2026-11-20)
+
+- A small graph in the bar after the label: the root's spread across the
+  sūrahs (19 groups of six, square-root scaled) or its Makkan / Madinan
+  split against an even spread. *Bar graph* setting; the tooltip spells it
+  out.
+- The Arabic root in the bar is centred on its own ink and sized to clear
+  the frame, instead of sinking to the Latin baseline.
+
 ## 1.1.0 (2026-11-20)
 
 - Diagrams under the root, one at a time: Verses, Companions (a network of
